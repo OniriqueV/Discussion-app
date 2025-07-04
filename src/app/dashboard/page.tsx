@@ -1,8 +1,8 @@
 // app/dashboard/page.tsx
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,30 +17,22 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    window.google.accounts.id.disableAutoSelect(); // One Tap logout
-    router.push("/login");
-  };
-
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 p-6">
-      <header className="flex justify-between items-center bg-white p-4 rounded shadow">
-        <h1 className="text-xl font-bold">Dashboard</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-        >
-          Logout
-        </button>
-      </header>
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      {/* Header Component */}
+      <Header />
 
-      <main className="mt-6">
-        <h2 className="text-2xl font-semibold">Chào mừng 👋</h2>
-        <p className="mt-2">Tên người dùng: <b>{user?.credential?.substring(0, 10)}...</b></p>
-        <p className="mt-2 text-sm text-gray-500">
-          (Hiển thị demo — credential là chuỗi JWT từ Google)
-        </p>
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Chào mừng 👋</h2>
+          <p className="text-gray-700 mb-2">
+            Tên người dùng: <b>{user?.credential?.substring(0, 10)}...</b>
+          </p>
+          <p className="text-sm text-gray-500">
+            (Hiển thị demo — credential là chuỗi JWT từ Google)
+          </p>
+        </div>
       </main>
     </div>
   );
