@@ -6,12 +6,14 @@ interface HeaderProps {
   showLogout?: boolean;
   showSettings?: boolean;
   showAccount?: boolean;
+  showUsers?: boolean; //
 }
 
 export default function Header({
   showLogout = true,
   showSettings = true,
   showAccount = true,
+  showUsers = true,
 }: HeaderProps) {
   const router = useRouter();
   
@@ -95,6 +97,33 @@ export default function Header({
                 </svg>
               </button>
             )}
+
+            {showUsers && (
+                <button
+                    onClick={() => handleNavigate("/users")}
+                    className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
+                    title="Users"
+                >
+                    <svg
+                    className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 20h5v-2a4 4 0 00-3-3.87M9 
+                        20H4v-2a4 4 0 013-3.87M16 
+                        3.13a4 4 0 010 7.75M8 
+                        3.13a4 4 0 000 7.75M12 
+                        14a4 4 0 00-4 4v1h8v-1a4 4 0 00-4-4z"
+                    />
+                    </svg>
+                </button>
+                )}
+
 
             {showLogout && (
               <button
