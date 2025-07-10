@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo } from "react";
 import { User } from "@/mock/users";
+import { useFilterSortPaginate } from "@/hooks/useFilterSortPaginate";
+
 import { 
   DEFAULT_PAGE_SIZE, 
   STATUS_OPTIONS, 
@@ -28,11 +30,11 @@ export default function UserTable({
   onDelete, 
   onBulkDelete 
 }: UserTableProps) {
-  const [page, setPage] = useState(0);
+  // const [page, setPage] = useState(0);
   const [data, setData] = useState(users);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-  const [sortField, setSortField] = useState<SortField>(null);
+  // const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  // const [sortField, setSortField] = useState<SortField>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(FILTER_OPTIONS.ALL);
   //Logic hiển thị confirm modal
@@ -40,54 +42,84 @@ export default function UserTable({
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
 
+    // Hook xử lý lọc, sắp xếp, phân trang
+  const {
+    paginatedData: paginatedUsers,
+    filteredData: filteredAndSortedData,
+    totalPages,
+    currentPage: page,
+    setPage,
+    sortField,
+    setSortField,
+    sortOrder,
+    setSortOrder,
+  } = useFilterSortPaginate(data, DEFAULT_PAGE_SIZE, {
+    searchTerm,
+    searchFields: ["name", "email"],
+    statusFilter,
+    statusField: "status",
+    sortField: "name",
+    sortOrder: "asc",
+  });
+
   const handleSort = (field: SortField) => {
     if (!field) return;
-    
     if (sortField === field) {
-      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
       setSortOrder("asc");
     }
   };
+  // const handleSort = (field: SortField) => {
+  //   if (!field) return;
+    
+  //   if (sortField === field) {
+  //     setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  //   } else {
+  //     setSortField(field);
+  //     setSortOrder("asc");
+  //   }
+  // };
 
-  const filteredAndSortedData = useMemo(() => {
-    let filtered = [...data];
+  // const filteredAndSortedData = useMemo(() => {
+  //   let filtered = [...data];
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+  //   // Apply search filter
+  //   if (searchTerm) {
+  //     filtered = filtered.filter(user =>
+  //       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  //       user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  //     );
+  //   }
     
 
-    // Apply status filter
-    if (statusFilter !== FILTER_OPTIONS.ALL) {
-      filtered = filtered.filter(user => user.status === statusFilter);
-    }
+  //   // Apply status filter
+  //   if (statusFilter !== FILTER_OPTIONS.ALL) {
+  //     filtered = filtered.filter(user => user.status === statusFilter);
+  //   }
 
-    // Apply sorting
-    if (sortField) {
-      filtered.sort((a, b) => {
-        const valueA = a[sortField];
-        const valueB = b[sortField];
-        return sortOrder === "asc"
-          ? valueA.localeCompare(valueB)
-          : valueB.localeCompare(valueA);
-      });
-    }
+  //   // Apply sorting
+  //   if (sortField) {
+  //     filtered.sort((a, b) => {
+  //       const valueA = a[sortField];
+  //       const valueB = b[sortField];
+  //       return sortOrder === "asc"
+  //         ? valueA.localeCompare(valueB)
+  //         : valueB.localeCompare(valueA);
+  //     });
+  //   }
 
-    return filtered;
-  }, [data, searchTerm, statusFilter, sortField, sortOrder]);
+  //   return filtered;
+  // }, [data, searchTerm, statusFilter, sortField, sortOrder]);
 
-  const paginatedUsers = filteredAndSortedData.slice(
-    page * DEFAULT_PAGE_SIZE,
-    (page + 1) * DEFAULT_PAGE_SIZE
-  );
+  // const paginatedUsers = filteredAndSortedData.slice(
+  //   page * DEFAULT_PAGE_SIZE,
+  //   (page + 1) * DEFAULT_PAGE_SIZE
+  // );
+    
 
-  const totalPages = Math.ceil(filteredAndSortedData.length / DEFAULT_PAGE_SIZE);
+  // const totalPages = Math.ceil(filteredAndSortedData.length / DEFAULT_PAGE_SIZE);
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) =>

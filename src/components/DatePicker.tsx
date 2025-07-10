@@ -10,6 +10,7 @@ interface CustomDatePickerProps {
   onChange: (date: Date | null) => void;
   error?: string;
   maxDate?: Date;
+  minDate?: Date;
   showYearDropdown?: boolean;
   showMonthDropdown?: boolean;
 }

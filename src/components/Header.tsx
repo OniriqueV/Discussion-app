@@ -6,7 +6,10 @@ interface HeaderProps {
   showLogout?: boolean;
   showSettings?: boolean;
   showAccount?: boolean;
-  showUsers?: boolean; //
+  showUsers?: boolean; 
+  showCompanies?: boolean;
+  showTopics?: boolean; 
+  showTags?: boolean;
 }
 
 export default function Header({
@@ -14,6 +17,9 @@ export default function Header({
   showSettings = true,
   showAccount = true,
   showUsers = true,
+  showCompanies = true,
+  showTopics = true,
+  showTags = true,
 }: HeaderProps) {
   const router = useRouter();
   
@@ -97,6 +103,28 @@ export default function Header({
                 </svg>
               </button>
             )}
+            {showCompanies && (
+            <button
+              onClick={() => handleNavigate("/companies")}
+              className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
+              title="Companies"
+            >
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M16 3H8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2zM3 7h18"
+                />
+              </svg>
+            </button>
+          )}
+
 
             {showUsers && (
                 <button
@@ -123,6 +151,51 @@ export default function Header({
                     </svg>
                 </button>
                 )}
+
+            {showTopics && (
+              <button
+                onClick={() => handleNavigate("/topics")}
+                className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
+                title="Topics"
+              >
+                <svg
+                  className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11H5m14 0a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2a2 2 0 002 2m14 0v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2m0 0H19"
+                  />
+                </svg>
+              </button>
+            )}
+
+            {showTags && (
+            <button
+              onClick={() => handleNavigate("/tags")}
+              className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
+              title="Tags"
+            >
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 7h10M7 12h5m-5 5h10M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5z"
+                />
+              </svg>
+            </button>
+          )}
+
 
 
             {showLogout && (
