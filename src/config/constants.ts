@@ -3,10 +3,27 @@ export const DEFAULT_PAGE_SIZE = 10;
 
 export const USER_ROLES = ["admin", "ca_user", "member"] as const;
 
+export const ROLE_LABELS = {
+  admin: "Quản trị viên",
+  ca_user: "Account quản lý",
+  member: "Thành viên"
+};
+
 export const STATUS_OPTIONS = [
   { value: "active", label: "Đang hoạt động" },
   { value: "inactive", label: "Ngừng hoạt động" },
 ] as const;
+
+export const COMPANIES = [
+  { value: "TechCorp", label: "TechCorp" },
+  { value: "DataSoft", label: "DataSoft" },
+  { value: "CloudWorks", label: "CloudWorks" },
+  { value: "InnovateLab", label: "InnovateLab" },
+  { value: "DigitalFlow", label: "DigitalFlow" },
+  { value: "SystemPlus", label: "SystemPlus" },
+  { value: "NetSolution", label: "NetSolution" },
+  { value: "CodeFactory", label: "CodeFactory" }
+];
 
 export const SORT_ORDERS = ["asc", "desc"] as const;
 
