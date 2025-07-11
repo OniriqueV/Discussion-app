@@ -58,8 +58,8 @@ export default function UserTable({
     searchFields: ["name", "email"],
     statusFilter,
     statusField: "status",
-    sortField: "name",
-    sortOrder: "asc",
+    initialSortField: "name",       // ✅ đúng
+    initialSortOrder: "asc",        // ✅ đúng
   });
 
   const handleSort = (field: SortField) => {

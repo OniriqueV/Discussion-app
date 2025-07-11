@@ -10,6 +10,7 @@ interface HeaderProps {
   showCompanies?: boolean;
   showTopics?: boolean; 
   showTags?: boolean;
+  showPosts?: boolean;
 }
 
 export default function Header({
@@ -20,6 +21,7 @@ export default function Header({
   showCompanies = true,
   showTopics = true,
   showTags = true,
+  showPosts = true,
 }: HeaderProps) {
   const router = useRouter();
   
@@ -196,6 +198,27 @@ export default function Header({
             </button>
           )}
 
+          {showPosts && (
+            <button
+              onClick={() => handleNavigate("/posts")}
+              className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
+              title="Posts"
+            >
+              <svg
+                className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 21H5a2 2 0 01-2-2V7a2 2 0 012-2h4l2-2h2l2 2h4a2 2 0 012 2v12a2 2 0 01-2 2z"
+                />
+              </svg>
+            </button>
+          )}
 
 
             {showLogout && (

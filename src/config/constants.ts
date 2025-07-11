@@ -43,6 +43,8 @@ export const MESSAGES = {
   SUCCESS_BULK_DELETE_TOPIC: "Đã xoá chủ đề đã chọn",
   SUCCESS_DELETE_TAG: "Đã xoá tag",
   SUCCESS_BULK_DELETE_TAG: "Đã xoá tag đã chọn",
+  SUCCESS_DELETE_POST: "Đã xoá bài viết",
+  SUCCESS_BULK_DELETE_POST: "Đã xoá bài viết đã chọn",
   SUCCESS_BULK_DELETE: "Đã xoá người dùng đã chọn",
   WARNING_SELECT_USERS: "Vui lòng chọn ít nhất 1 người dùng",
   SEARCH_PLACEHOLDER: "Tìm kiếm theo tên hoặc email...",

@@ -35,23 +35,24 @@ export default function CompanyTable({
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
-  const [sortField, setSortField] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortField, setSortField] = useState<SortField>("name");
 
   const {
-    paginatedData: paginatedCompanies,
-    filteredData,
-    totalPages,
-    currentPage: page,
-    setPage,
-  } = useFilterSortPaginate(data, DEFAULT_PAGE_SIZE, {
-    searchTerm,
-    searchFields: ["name", "account"],
-    statusFilter,
-    statusField: "status",
-    sortField,
-    sortOrder,
-  });
+  paginatedData: paginatedCompanies,
+  filteredData,
+  totalPages,
+  currentPage: page,
+  setPage,
+} = useFilterSortPaginate(data, DEFAULT_PAGE_SIZE, {
+  searchTerm,
+  searchFields: ["name", "account"],
+  statusFilter,
+  statusField: "status",
+  initialSortField: sortField,      // ✅ truyền đúng key
+  initialSortOrder: sortOrder,      // ✅ truyền đúng key
+});
+
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
