@@ -71,7 +71,8 @@ model Tag {
   created_at DateTime? @default(now()) @db.Timestamp(6)
   updated_at DateTime? @db.Timestamp(6)
   deleted_at DateTime? @db.Timestamp(6)
-  post_tags  PostTag[] @ignore
+  slug       String    @unique @default("") @db.VarChar
+  post_tags  PostTag[]
 
   @@index([name])
   @@map("tags")
@@ -93,7 +94,7 @@ model Post {
   updated_at       DateTime?   @db.Timestamp(6)
   deleted_at       DateTime?   @db.Timestamp(6)
   comments         Comment[]
-  post_tags        PostTag[]   @ignore
+  post_tags        PostTag[]
   company          Company?    @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rejected_by_user User?       @relation("PostRejectedBy", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   topic            Topic?      @relation(fields: [topic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -111,14 +112,16 @@ model Post {
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model PostTag {
-  post_id Int?
-  tag_id  Int?
-  post    Post? @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tag     Tag?  @relation(fields: [tag_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  post_id Int
+  tag_id  Int
 
+  post Post @relation(fields: [post_id], references: [id], onDelete: NoAction)
+  tag  Tag  @relation(fields: [tag_id], references: [id], onDelete: NoAction)
+
+  @@id([post_id, tag_id])
   @@map("post_tags")
-  @@ignore
 }
+
 
 model Comment {
   id            Int           @id @default(autoincrement())
