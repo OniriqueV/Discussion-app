@@ -28,7 +28,7 @@ import { RolesGuard } from '../auth/roles.guard';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Roles('admin', 'company_account')
+  @Roles('admin', 'ca_user')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(
@@ -38,7 +38,7 @@ export class UserController {
     return this.userService.create(dto, req.user);
   }
 
-  @Roles('admin', 'company_account')
+  @Roles('admin', 'ca_user')
   @Get()
   findAll(
     @Query('page') page?: string,
@@ -54,7 +54,7 @@ export class UserController {
     return this.userService.findAll(pageNum, limitNum, role, companyId, req.user);
   }
 
-  @Roles('admin', 'company_account')
+  @Roles('admin', 'ca_user')
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -63,7 +63,7 @@ export class UserController {
     return this.userService.findOne(id, req.user);
   }
 
-  @Roles('admin', 'company_account')
+  @Roles('admin', 'ca_user')
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -73,7 +73,7 @@ export class UserController {
     return this.userService.update(id, dto, req.user);
   }
 
-  @Roles('admin', 'company_account')
+  @Roles('admin', 'ca_user')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(
@@ -83,7 +83,7 @@ export class UserController {
     return this.userService.remove(id, req.user);
   }
 
-  // Endpoint mới để admin gán member thành company_account
+  // Endpoint mới để admin gán member thành ca_user
   @Roles('admin')
   @Post('assign-ca-users')
   @HttpCode(HttpStatus.OK)
