@@ -5,6 +5,7 @@ import { UpdateTagDto } from './dto/update-tag.dto';
 import { BulkDeleteTagDto } from './dto/bulk-delete.dto';
 import { SearchTagDto } from './dto/search-tag.dto';
 import slugify from 'slugify';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TagService {
@@ -72,16 +73,44 @@ export class TagService {
         }
       })
     };
+    
+    const safeSortBy = (() => {
+      switch (sortBy) {
+        case 'postsCount':
+          return { post_tags: { _count: sortOrder } };
+        case 'createdAt':
+        case 'created_at':
+          return { created_at: sortOrder };
 
-    const [tags, total] = await Promise.all([
+        case 'name':
+          return { name: sortOrder };
+        default:
+          return { created_at: 'desc' };
+      }
+    })();
+
+
+ const sortMapping: Record<string, keyof Prisma.TagOrderByWithRelationInput> = {
+  createdAt: 'created_at',
+  name: 'name',
+};
+
+const orderByClause: Prisma.TagOrderByWithRelationInput =
+  sortBy === 'postsCount'
+    ? { post_tags: { _count: sortOrder as Prisma.SortOrder } }
+    : sortMapping[sortBy]
+    ? { [sortMapping[sortBy]]: sortOrder as Prisma.SortOrder }
+    : { created_at: 'desc' as Prisma.SortOrder };
+
+const [tags, total] = await Promise.all([
       this.prisma.tag.findMany({
         where: whereClause,
         include: {
           post_tags: {
             where: {
               post: {
-                deleted_at: null
-              }
+                deleted_at: null,
+              },
             },
             select: {
               post: {
@@ -92,32 +121,31 @@ export class TagService {
                   created_at: true,
                   views: true,
                   is_pinned: true,
-                }
-              }
-            }
+                },
+              },
+            },
           },
           _count: {
             select: {
               post_tags: {
                 where: {
                   post: {
-                    deleted_at: null
-                  }
-                }
-              }
-            }
-          }
+                    deleted_at: null,
+                  },
+                },
+              },
+            },
+          },
         },
-        orderBy: sortBy === 'postsCount' 
-          ? { post_tags: { _count: sortOrder } }
-          : { [sortBy]: sortOrder },
+        orderBy: orderByClause,
         skip,
         take: limit,
       }),
       this.prisma.tag.count({
-        where: whereClause
-      })
+        where: whereClause,
+      }),
     ]);
+
 
     return {
       data: tags,
