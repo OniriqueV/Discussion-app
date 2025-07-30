@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { User } from "@/mock/users";
+import React, { useState, useEffect } from "react";
+import { userService, User } from "@/api/user";
 import { useFilterSortPaginate } from "@/hooks/useFilterSortPaginate";
+import { getCompanies } from "@/api/companyApi";
 
 import { 
   DEFAULT_PAGE_SIZE, 
@@ -12,37 +13,45 @@ import {
 } from "@/config/constants";
 import { toast } from "react-toastify";
 import ConfirmModal from "./ConfirmModal";
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
 
 interface UserTableProps {
-  users: User[];
   onEdit?: (id: number) => void;
-  onDelete?: (id: number) => void;
-  onBulkDelete?: (ids: number[]) => void;
+  refreshTrigger?: number; // Để trigger refresh từ parent
 }
 
-type SortField = "status" | "name"  | null;
+type SortField = "status" | "full_name" | null;
 type SortOrder = "asc" | "desc";
 type StatusFilter = "all" | "active" | "inactive";
 
 export default function UserTable({ 
-  users, 
-  onEdit, 
-  onDelete, 
-  onBulkDelete 
+  onEdit,
+  refreshTrigger = 0
 }: UserTableProps) {
-  // const [page, setPage] = useState(0);
-  const [data, setData] = useState(users);
+  const [data, setData] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  // const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-  // const [sortField, setSortField] = useState<SortField>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(FILTER_OPTIONS.ALL);
-  //Logic hiển thị confirm modal
+  const [totalItems, setTotalItems] = useState(0);
+  const [companyOptions, setCompanyOptions] = useState<{id: number, name: string}[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | undefined>(undefined);
+
+  
+
+  const currentUser = useCurrentUser();
+  const user = currentUser as any;
+  const isCaUser = currentUser?.role === 'ca_user';
+  
+
+
+  
+  // Logic hiển thị confirm modal
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
 
-    // Hook xử lý lọc, sắp xếp, phân trang
+  // Hook xử lý lọc, sắp xếp, phân trang - dùng cho local filtering
   const {
     paginatedData: paginatedUsers,
     filteredData: filteredAndSortedData,
@@ -55,12 +64,56 @@ export default function UserTable({
     setSortOrder,
   } = useFilterSortPaginate(data, DEFAULT_PAGE_SIZE, {
     searchTerm,
-    searchFields: ["name", "email"],
+    searchFields: ["full_name", "email"],
     statusFilter,
     statusField: "status",
-    initialSortField: "name",       // ✅ đúng
-    initialSortOrder: "asc",        // ✅ đúng
+    initialSortField: "full_name",
+    initialSortOrder: "asc",
   });
+
+  // Lấy danh sách công ty khi mount
+  useEffect(() => {
+    async function fetchCompanies() {
+      try {
+        const companies = await getCompanies();
+        setCompanyOptions(companies.map((c: any) => ({ id: c.id, name: c.name })));
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchCompanies();
+  }, []);
+
+  // Fetch users from API
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const params: any = {
+        page: 1,
+        limit: 1000,
+      };
+      if (!isCaUser && selectedCompanyId) {
+        params.company_id = selectedCompanyId;
+      }
+      const response = await userService.getUsers(params);
+      let users = response.data;
+      if (isCaUser && user?.company_id) {
+        users = users.filter(u => u.company_id === user.company_id);
+      }
+      setData(users);
+      setTotalItems(users.length);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Không thể tải danh sách người dùng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Gọi lại fetchUsers khi chọn công ty hoặc refresh
+  useEffect(() => {
+    fetchUsers();
+  }, [refreshTrigger, selectedCompanyId]);
 
   const handleSort = (field: SortField) => {
     if (!field) return;
@@ -71,55 +124,6 @@ export default function UserTable({
       setSortOrder("asc");
     }
   };
-  // const handleSort = (field: SortField) => {
-  //   if (!field) return;
-    
-  //   if (sortField === field) {
-  //     setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-  //   } else {
-  //     setSortField(field);
-  //     setSortOrder("asc");
-  //   }
-  // };
-
-  // const filteredAndSortedData = useMemo(() => {
-  //   let filtered = [...data];
-
-  //   // Apply search filter
-  //   if (searchTerm) {
-  //     filtered = filtered.filter(user =>
-  //       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  //     );
-  //   }
-    
-
-  //   // Apply status filter
-  //   if (statusFilter !== FILTER_OPTIONS.ALL) {
-  //     filtered = filtered.filter(user => user.status === statusFilter);
-  //   }
-
-  //   // Apply sorting
-  //   if (sortField) {
-  //     filtered.sort((a, b) => {
-  //       const valueA = a[sortField];
-  //       const valueB = b[sortField];
-  //       return sortOrder === "asc"
-  //         ? valueA.localeCompare(valueB)
-  //         : valueB.localeCompare(valueA);
-  //     });
-  //   }
-
-  //   return filtered;
-  // }, [data, searchTerm, statusFilter, sortField, sortOrder]);
-
-  // const paginatedUsers = filteredAndSortedData.slice(
-  //   page * DEFAULT_PAGE_SIZE,
-  //   (page + 1) * DEFAULT_PAGE_SIZE
-  // );
-    
-
-  // const totalPages = Math.ceil(filteredAndSortedData.length / DEFAULT_PAGE_SIZE);
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) =>
@@ -140,80 +144,62 @@ export default function UserTable({
 
   const showConfirm = (message: string, action: () => void) => {
     setConfirmMessage(message);
-    setOnConfirmAction(() => action); // tránh chạy ngay
+    setOnConfirmAction(() => action);
     setConfirmVisible(true);
-    };
+  };
 
-    const handleDelete = (user: User) => {
-    showConfirm(`Bạn có chắc muốn xoá ${user.name}?`, () => {
+  const handleDelete = async (user: User) => {
+    showConfirm(`Bạn có chắc muốn xoá ${user.full_name}?`, async () => {
+      try {
+        await userService.deleteUser(user.id);
         setData((prev) => prev.filter((u) => u.id !== user.id));
-        onDelete?.(user.id);
-        toast.success(MESSAGES.SUCCESS_DELETE);
+        setSelectedIds((prev) => prev.filter((id) => id !== user.id));
+      } catch (error) {
+        // Error toast already shown in service
+      }
     });
-    };
+  };
 
-    const handleDeleteSelected = () => {
+  const handleDeleteSelected = () => {
     if (selectedIds.length === 0) {
-        toast.warn(MESSAGES.WARNING_SELECT_USERS);
-        return;
+      toast.warn(MESSAGES.WARNING_SELECT_USERS);
+      return;
     }
 
-    showConfirm(`Bạn có chắc muốn xoá ${selectedIds.length} người dùng?`, () => {
+    showConfirm(`Bạn có chắc muốn xoá ${selectedIds.length} người dùng?`, async () => {
+      try {
+        // Delete each user individually since there's no bulk delete endpoint
+        await Promise.all(selectedIds.map(id => userService.deleteUser(id)));
         setData((prev) => prev.filter((u) => !selectedIds.includes(u.id)));
-        onBulkDelete?.(selectedIds);
         setSelectedIds([]);
         toast.success(MESSAGES.SUCCESS_BULK_DELETE);
+      } catch (error) {
+        toast.error('Có lỗi khi xóa một số người dùng');
+      }
     });
-    };
+  };
 
+  const handleStatusToggle = async (userId: number) => {
+    const user = data.find(u => u.id === userId);
+    if (!user) return;
 
-
- 
-
-
-  const handleStatusToggle = (userId: number) => {
-    setData((prev) =>
-      prev.map((user) =>
-        user.id === userId
-          ? { ...user, status: user.status === "active" ? "inactive" : "active" }
-          : user
-      )
-    );
+    try {
+      const newStatus = user.status === "active" ? "inactive" : "active";
+      await userService.updateUser(userId, { status: newStatus });
+      
+      setData((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, status: newStatus } : u
+        )
+      );
+      
+      toast.success(`Đã ${newStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa'} người dùng`);
+    } catch (error) {
+      // Error toast already shown in service
+    }
   };
 
 
-  // Confirm toast component
-    const showConfirmDeleteToast = (userName: string, onConfirm: () => void) => {
-    const toastId = toast.info(
-        ({ closeToast }) => (
-        <div>
-            <p>Bạn có chắc muốn xoá <b>{userName}</b>?</p>
-            <div className="mt-2 flex gap-2">
-            <button
-                onClick={() => {
-                onConfirm();
-                toast.dismiss(toastId); // đóng toast sau khi xác nhận
-                }}
-                className="px-3 py-1 bg-red-600 text-white rounded text-sm"
-            >
-                Xoá
-            </button>
-            <button
-                onClick={() => toast.dismiss(toastId)}
-                className="px-3 py-1 bg-gray-300 text-black rounded text-sm"
-            >
-                Huỷ
-            </button>
-            </div>
-        </div>
-        ),
-        {
-        autoClose: false,
-        closeOnClick: false,
-        closeButton: false,
-        }
-    );
-    };
 
   const getSortIcon = (field: string) => {
     if (sortField !== field) return "↕️";
@@ -239,13 +225,21 @@ export default function UserTable({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setPage(0); // Reset to first page when searching
+    setPage(0);
   };
 
   const handleStatusFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setStatusFilter(e.target.value as StatusFilter);
-    setPage(0); // Reset to first page when filtering
+    setPage(0);
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang tải...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -270,9 +264,21 @@ export default function UserTable({
               <option value={FILTER_OPTIONS.ACTIVE}>Đang hoạt động</option>
               <option value={FILTER_OPTIONS.INACTIVE}>Ngừng hoạt động</option>
             </select>
+            <select
+              value={isCaUser ? user?.company_id ?? "" : selectedCompanyId ?? ""}
+              onChange={e => setSelectedCompanyId(e.target.value ? Number(e.target.value) : undefined)}
+              className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isCaUser}
+            >
+              <option value="">Tất cả công ty</option>
+              {companyOptions.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="flex gap-2">
+          
           <button
             onClick={handleDeleteSelected}
             disabled={selectedIds.length === 0}
@@ -306,21 +312,18 @@ export default function UserTable({
               </th>
               <th 
                 className="px-3 py-3 border-b text-left cursor-pointer hover:bg-gray-100"
-                onClick={() => handleSort("name")}
+                onClick={() => handleSort("full_name")}
               >
-                Tên {getSortIcon("name")}
+                Tên {getSortIcon("full_name")}
               </th>
-              <th 
-                className="px-3 py-3 border-b text-left cursor-pointer hover:bg-gray-100"
-                
-              >
+              <th className="px-3 py-3 border-b text-left">
                 Email 
               </th>
-              <th 
-                className="px-3 py-3 border-b text-left cursor-pointer hover:bg-gray-100"
-                
-              >
+              <th className="px-3 py-3 border-b text-left">
                 Vai trò 
+              </th>
+              <th className="px-3 py-3 border-b text-left">
+                Công ty 
               </th>
               <th 
                 className="px-3 py-3 border-b text-left cursor-pointer hover:bg-gray-100"
@@ -334,7 +337,7 @@ export default function UserTable({
           <tbody>
             {paginatedUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
                   {MESSAGES.NO_USERS_FOUND}
                 </td>
               </tr>
@@ -349,12 +352,15 @@ export default function UserTable({
                       className="rounded"
                     />
                   </td>
-                  <td className="px-3 py-3 border-b font-medium">{user.name}</td>
+                  <td className="px-3 py-3 border-b font-medium">{user.full_name}</td>
                   <td className="px-3 py-3 border-b text-gray-600">{user.email}</td>
                   <td className="px-3 py-3 border-b">
                     <span className={getRoleBadge(user.role)}>
                       {user.role}
                     </span>
+                  </td>
+                  <td className="px-3 py-3 border-b text-gray-600">
+                    {user.company?.name || 'N/A'}
                   </td>
                   <td className="px-3 py-3 border-b">
                     <span className={getStatusBadge(user.status)}>
@@ -427,17 +433,17 @@ export default function UserTable({
           </div>
         </div>
       )}
-        {confirmVisible && (
-    <ConfirmModal
-        message={confirmMessage}
-        onConfirm={() => {
-        onConfirmAction();
-        setConfirmVisible(false);
-        }}
-        onCancel={() => setConfirmVisible(false)}
-    />
-    )}
 
+      {confirmVisible && (
+        <ConfirmModal
+          message={confirmMessage}
+          onConfirm={() => {
+            onConfirmAction();
+            setConfirmVisible(false);
+          }}
+          onCancel={() => setConfirmVisible(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,23 +1,46 @@
 "use client";
-import { Topic } from "@/mock/topics";
+import { Topic, topicApi } from "@/api/topic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { DEFAULT_PAGE_SIZE, MESSAGES } from "@/config/constants";
 import { toast } from "react-toastify";
 import ConfirmModal from "./ConfirmModal";
 
-type SortKey = "name" | "postCount" | "createdAt";
+type SortKey = "name" | "postCount" | "created_at";
 
-export default function TopicTable({ topics }: { topics: Topic[] }) {
+export default function TopicTable() {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [data, setData] = useState(topics);
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
+  const [data, setData] = useState<Topic[]>([]);
+  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
+
+  // Load data from API
+  useEffect(() => {
+    loadTopics();
+  }, []);
+
+  const loadTopics = async () => {
+    try {
+      setLoading(true);
+      const response = await topicApi.findAll();
+      if (response.success) {
+        setData(response.data);
+      } else {
+        toast.error("Không thể tải danh sách topics");
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tải danh sách topics");
+      console.error("Error loading topics:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredSorted = useMemo(() => {
     let filtered = data.filter((t) =>
@@ -25,8 +48,30 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
     );
 
     filtered.sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
+      let aVal: any, bVal: any;
+      
+      switch (sortKey) {
+        case "name":
+          aVal = a.name;
+          bVal = b.name;
+          break;
+        case "postCount":
+          aVal = a._count?.posts || 0;
+          bVal = b._count?.posts || 0;
+          break;
+        case "created_at":
+          aVal = new Date(a.created_at).getTime();
+          bVal = new Date(b.created_at).getTime();
+          break;
+        default:
+          aVal = a.created_at;
+          bVal = b.created_at;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      
       if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
       if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
       return 0;
@@ -55,47 +100,71 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
     return sortOrder === "asc" ? "↑" : "↓";
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+  const toggleSelect = (slug: string) => {
+    setSelectedSlugs((prev) =>
+      prev.includes(slug) ? prev.filter((x) => x !== slug) : [...prev, slug]
     );
   };
 
   const toggleSelectAll = () => {
-    const currentIds = paginatedTopics.map((t) => t.id);
-    const allSelected = currentIds.every((id) => selectedIds.includes(id));
+    const currentSlugs = paginatedTopics.map((t) => t.slug);
+    const allSelected = currentSlugs.every((slug) => selectedSlugs.includes(slug));
 
     if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !currentIds.includes(id)));
+      setSelectedSlugs((prev) => prev.filter((slug) => !currentSlugs.includes(slug)));
     } else {
-      setSelectedIds((prev) => [...new Set([...prev, ...currentIds])]);
+      setSelectedSlugs((prev) => [...new Set([...prev, ...currentSlugs])]);
     }
   };
 
   const handleDelete = (topic: Topic) => {
     setConfirmMessage(`Bạn có chắc muốn xoá topic "${topic.name}"?`);
-    setOnConfirmAction(() => () => {
-      setData((prev) => prev.filter((t) => t.id !== topic.id));
-      setSelectedIds((prev) => prev.filter((id) => id !== topic.id));
-      toast.success(MESSAGES.SUCCESS_DELETE_TOPIC);
+    setOnConfirmAction(() => async () => {
+      try {
+        const response = await topicApi.delete(topic.slug);
+        if (response.success) {
+          setData((prev) => prev.filter((t) => t.slug !== topic.slug));
+          setSelectedSlugs((prev) => prev.filter((slug) => slug !== topic.slug));
+          toast.success(MESSAGES.SUCCESS_DELETE_TOPIC || "Xóa topic thành công");
+        }
+      } catch (error) {
+        toast.error("Lỗi khi xóa topic");
+        console.error("Error deleting topic:", error);
+      }
     });
     setConfirmVisible(true);
   };
 
   const handleBulkDelete = () => {
-    if (selectedIds.length === 0) {
+    if (selectedSlugs.length === 0) {
       toast.warn("Vui lòng chọn ít nhất một topic để xoá.");
       return;
     }
 
-    setConfirmMessage(`Bạn có chắc muốn xoá ${selectedIds.length} topic đã chọn?`);
-    setOnConfirmAction(() => () => {
-      setData((prev) => prev.filter((t) => !selectedIds.includes(t.id)));
-      setSelectedIds([]);
-      toast.success(MESSAGES.SUCCESS_BULK_DELETE_TOPIC);
+    setConfirmMessage(`Bạn có chắc muốn xoá ${selectedSlugs.length} topic đã chọn?`);
+    setOnConfirmAction(() => async () => {
+      try {
+        const response = await topicApi.bulkDelete({ slugs: selectedSlugs });
+        if (response.success) {
+          setData((prev) => prev.filter((t) => !selectedSlugs.includes(t.slug)));
+          setSelectedSlugs([]);
+          toast.success(MESSAGES.SUCCESS_BULK_DELETE_TOPIC || "Xóa topics thành công");
+        }
+      } catch (error) {
+        toast.error("Lỗi khi xóa topics");
+        console.error("Error bulk deleting topics:", error);
+      }
     });
     setConfirmVisible(true);
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -113,10 +182,10 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
         />
         <button
           onClick={handleBulkDelete}
-          disabled={selectedIds.length === 0}
+          disabled={selectedSlugs.length === 0}
           className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          Xoá đã chọn ({selectedIds.length})
+          Xoá đã chọn ({selectedSlugs.length})
         </button>
       </div>
 
@@ -129,7 +198,7 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
                 type="checkbox"
                 checked={
                   paginatedTopics.length > 0 &&
-                  paginatedTopics.every((t) => selectedIds.includes(t.id))
+                  paginatedTopics.every((t) => selectedSlugs.includes(t.slug))
                 }
                 onChange={toggleSelectAll}
               />
@@ -140,8 +209,8 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
             <th className="p-2 border cursor-pointer" onClick={() => toggleSort("postCount")}>
               Số bài viết {getSortIcon("postCount")}
             </th>
-            <th className="p-2 border cursor-pointer" onClick={() => toggleSort("createdAt")}>
-              Ngày tạo {getSortIcon("createdAt")}
+            <th className="p-2 border cursor-pointer" onClick={() => toggleSort("created_at")}>
+              Ngày tạo {getSortIcon("created_at")}
             </th>
             <th className="p-2 border">Hành động</th>
           </tr>
@@ -159,18 +228,18 @@ export default function TopicTable({ topics }: { topics: Topic[] }) {
                 <td className="p-2 border">
                   <input
                     type="checkbox"
-                    checked={selectedIds.includes(topic.id)}
-                    onChange={() => toggleSelect(topic.id)}
+                    checked={selectedSlugs.includes(topic.slug)}
+                    onChange={() => toggleSelect(topic.slug)}
                   />
                 </td>
                 <td className="p-2 border">{topic.name}</td>
-                <td className="p-2 border">{topic.postCount}</td>
+                <td className="p-2 border">{topic._count?.posts || 0}</td>
                 <td className="p-2 border">
-                  {new Date(topic.createdAt).toLocaleDateString()}
+                  {new Date(topic.created_at).toLocaleDateString()}
                 </td>
                 <td className="p-2 border">
                   <Link
-                    href={`/topics/edit/${topic.id}`}
+                    href={`/topics/edit/${topic.slug}`}
                     className="text-blue-500 mr-2"
                   >
                     Sửa

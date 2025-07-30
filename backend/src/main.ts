@@ -1,20 +1,27 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // ✅ Global validation with transform
+  // ✅ Serve file tĩnh
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/', // => /uploads/xxx.png sẽ map tới thư mục ./uploads/
+  });
+
+  // ✅ Global validation
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: true, // ⚠️ Bắt buộc để @Type và mặc định hoạt động
-      whitelist: true, // Loại bỏ field không có trong DTO
-      forbidNonWhitelisted: true, // Lỗi nếu query/body chứa field lạ
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
     })
   );
 
-  // ✅ Bật CORS để FE gọi được API
+  // ✅ Bật CORS
   app.enableCors({
     origin: 'http://localhost:3000',
     credentials: true,

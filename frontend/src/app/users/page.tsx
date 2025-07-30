@@ -1,17 +1,24 @@
 "use client";
-
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import UserTable from "@/components/UserTable";
-import { usersMock } from "@/mock/users";
 import Header from "@/components/Header";
+import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 export default function UsersPage() {
   const router = useRouter();
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Redirect if not authenticated or not authorized
+  useAuthRedirect("admin", "ca_user"); // This will check if user is logged in and redirect to login if not
 
   const handleEdit = (id: number) => router.push(`/users/edit/${id}`);
-  const handleDelete = (id: number) => console.log(`Deleted user with ID: ${id}`);
-  const handleBulkDelete = (ids: number[]) => console.log(`Bulk deleted: ${ids.join(", ")}`);
   const handleAddUser = () => router.push("/users/add");
+  
+  // Function to trigger refresh of UserTable
+  const refreshTable = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   return (
     <>
@@ -26,12 +33,9 @@ export default function UsersPage() {
             + Thêm người dùng
           </button>
         </div>
-
         <UserTable
-          users={usersMock}
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          onBulkDelete={handleBulkDelete}
+          refreshTrigger={refreshTrigger}
         />
       </div>
     </>

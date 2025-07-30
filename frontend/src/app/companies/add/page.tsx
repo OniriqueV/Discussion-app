@@ -4,8 +4,10 @@ import CompanyForm from "@/components/CompanyForm";
 import { useRouter } from "next/navigation";
 import { createCompany, uploadCompanyLogo } from "@/api/companyApi";
 import { toast } from "react-toastify";
+import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 export default function AddCompanyPage() {
+  useAuthRedirect("admin");
   const router = useRouter();
 
   const handleCreate = async (data: any, file?: File) => {

@@ -6,8 +6,10 @@ import { getCompany, updateCompany, uploadCompanyLogo } from "@/api/companyApi";
 import CompanyForm from "@/components/CompanyForm";
 import { toast } from "react-toastify";
 import { Company } from "@/mock/companies";
+import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 export default function EditCompanyPage() {
+  useAuthRedirect("admin", "ca_user");
   const { id } = useParams();
   const router = useRouter();
   const [initialData, setInitialData] = useState<Partial<Company> | null>(null);
@@ -28,17 +30,29 @@ export default function EditCompanyPage() {
 
     fetchCompany();
   }, [id, router]);
+type UpdateCompanyDto = {
+  name: string;
+  address?: string;
+  max_users?: number;
+  expired_time?: string;
+  status: "active" | "inactive";
+};
 
   const handleUpdate = async (formData: any, file?: File) => {
     try {
-      const payload = {
-        name: formData.name,
-        address: formData.address,
-        max_users: formData.maxUsers,
-        expired_time: formData.expiredAt?.toISOString(),
-        status: formData.active ? "active" as const : "inactive" as const,
-      };
+      const payload: UpdateCompanyDto = {
+  name: formData.name,
+  address: formData.address,
+  max_users: Number(formData.maxUsers),
+  expired_time: formData.expiredAt?.toISOString(),
+  status: formData.active ? "active" : "inactive",
+};
 
+
+
+
+
+      console.log("Payload gửi đi:", payload);
       const updated = await updateCompany(Number(id), payload);
 
       if (file) {

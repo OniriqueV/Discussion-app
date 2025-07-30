@@ -91,14 +91,14 @@ export class UserService {
       return;
     }
 
-    if (currentUser.role === 'company_account') {
-      // Company account chỉ có thể tạo member trong công ty của mình
+    if (currentUser.role === 'ca_user') {
+      // ca_user chỉ có thể tạo member trong công ty của mình
       if (dto.role !== 'member') {
-        throw new ForbiddenException('Company account chỉ có thể tạo user với role member');
+        throw new ForbiddenException('ca_user chỉ có thể tạo user với role member');
       }
 
       if (!dto.company_id || dto.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('Company account chỉ có thể tạo user trong công ty của mình');
+        throw new ForbiddenException('ca_user chỉ có thể tạo user trong công ty của mình');
       }
       return;
     }
@@ -168,19 +168,19 @@ export class UserService {
       return;
     }
 
-    if (currentUser.role === 'company_account') {
-      // Company account chỉ có thể cập nhật member trong công ty của mình
-      if (existingUser.role !== 'member' || existingUser.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('Company account chỉ có thể cập nhật member trong công ty của mình');
+    if (currentUser.role === 'ca_user') {
+      // ca_user chỉ có thể cập nhật user trong công ty của mình
+      if (existingUser.company_id !== currentUser.company_id) {
+        throw new ForbiddenException('ca_user chỉ có thể cập nhật user trong công ty của mình');
       }
 
-      // Company account không thể thay đổi role hoặc company_id
-      if (dto.role && dto.role !== 'member') {
-        throw new ForbiddenException('Company account không thể thay đổi role của user');
+      // ca_user không thể thay đổi role hoặc company_id
+      if (dto.role && dto.role !== existingUser.role) {
+        throw new ForbiddenException('ca_user không thể thay đổi role của user');
       }
 
       if (dto.company_id && dto.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('Company account không thể chuyển user sang công ty khác');
+        throw new ForbiddenException('ca_user không thể chuyển user sang công ty khác');
       }
 
       // Only admin can update email
@@ -204,11 +204,10 @@ export class UserService {
     };
 
     // Áp dụng filter theo quyền
-    if (currentUser?.role === 'company_account') {
-      // Company account chỉ xem được member trong công ty của mình
+    if (currentUser?.role === 'ca_user') {
+      // ca_user chỉ xem được user trong công ty của mình
       where = {
         ...where,
-        role: 'member',
         company_id: currentUser.company_id,
       };
     } else if (currentUser?.role === 'member') {
@@ -287,9 +286,9 @@ export class UserService {
     }
 
     // Kiểm tra quyền xem user
-    if (currentUser?.role === 'company_account') {
-      if (user.role !== 'member' || user.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('Company account chỉ có thể xem member trong công ty của mình');
+    if (currentUser?.role === 'ca_user') {
+      if (user.company_id !== currentUser.company_id) {
+        throw new ForbiddenException('ca_user chỉ có thể xem user trong công ty của mình');
       }
     } else if (currentUser?.role === 'member') {
       throw new ForbiddenException('Bạn không có quyền xem thông tin user');
@@ -310,10 +309,10 @@ export class UserService {
     // Kiểm tra quyền xóa user
     if (currentUser.role === 'admin') {
       // Admin có thể xóa bất kỳ user nào
-    } else if (currentUser.role === 'company_account') {
-      // Company account chỉ có thể xóa member trong công ty của mình
-      if (user.role !== 'member' || user.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('Company account chỉ có thể xóa member trong công ty của mình');
+    } else if (currentUser.role === 'ca_user') {
+      // ca_user chỉ có thể xóa user trong công ty của mình
+      if (user.company_id !== currentUser.company_id) {
+        throw new ForbiddenException('ca_user chỉ có thể xóa user trong công ty của mình');
       }
     } else {
       // Member không có quyền xóa user
@@ -360,7 +359,7 @@ export class UserService {
     // Kiểm tra tất cả users phải là member
     const nonMembers = users.filter(user => user.role !== 'member');
     if (nonMembers.length > 0) {
-      throw new BadRequestException('Chỉ có thể gán member thành company_account');
+      throw new BadRequestException('Chỉ có thể gán member thành ca_user');
     }
 
     // Cập nhật role và company_id cho các users
@@ -369,7 +368,7 @@ export class UserService {
         id: { in: dto.user_ids }
       },
       data: {
-        role: 'company_account',
+        role: 'ca_user',
         company_id: dto.company_id,
         updated_at: new Date(),
       }
@@ -379,13 +378,13 @@ export class UserService {
     for (const user of users) {
       await sendEmail(
         user.email,
-        'Chúc mừng! Bạn đã được gán làm Company Account',
-        `Xin chào ${user.full_name || user.email},\n\nBạn đã được gán làm Company Account cho công ty ${company.name}.\n\nBây giờ bạn có thể quản lý các member trong công ty của mình.\n\nTrân trọng!`
+        'Chúc mừng! Bạn đã được gán làm CA User',
+        `Xin chào ${user.full_name || user.email},\n\nBạn đã được gán làm CA User cho công ty ${company.name}.\n\nBây giờ bạn có thể quản lý các user trong công ty của mình.\n\nTrân trọng!`
       );
     }
 
     return {
-      message: `Đã gán thành công ${updatedUsers.count} user(s) làm company_account cho công ty ${company.name}`,
+      message: `Đã gán thành công ${updatedUsers.count} user(s) làm ca_user cho công ty ${company.name}`,
       updated_count: updatedUsers.count,
     };
   }

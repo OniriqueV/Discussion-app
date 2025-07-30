@@ -1,22 +1,23 @@
-// src/app/users/edit/[id]/page.tsx
+"use client";
 import Header from "@/components/Header";
 import UserForm from "@/components/UserForm";
-import { getUserById } from "@/mock/users";
 import { use } from "react";
+import { useAuthRedirect } from "@/hooks/useAuthRedirect";
 
 export default function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params); // unwrap params with use()
+  const { id } = use(params);
   const parsedId = parseInt(id, 10);
   
-  // Fetch user data from mock
-  const user = getUserById(parsedId);
-  
-  if (!user) {
+  // Redirect if not authenticated or not authorized
+  useAuthRedirect("admin", "ca_user");
+
+  // Validate ID
+  if (isNaN(parsedId)) {
     return (
       <>
         <Header />
         <div className="max-w-3xl mx-auto p-6">
-          <p className="text-red-500">Không tìm thấy người dùng</p>
+          <p className="text-red-500">ID người dùng không hợp lệ</p>
         </div>
       </>
     );
@@ -26,7 +27,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
     <>
       <Header />
       <div className="max-w-3xl mx-auto p-6">
-        <UserForm initialData={{ ...user, dateOfBirth: new Date(user.dateOfBirth) }} />
+        <UserForm userId={parsedId} />
       </div>
     </>
   );

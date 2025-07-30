@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Company } from "@/mock/companies";
 import { useFilterSortPaginate } from "@/hooks/useFilterSortPaginate";
 import { Tooltip } from "react-tooltip";
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -19,6 +20,12 @@ interface CompanyTableProps {
   onDelete?: (id: number) => void;
   onBulkDelete?: (ids: number[]) => void;
 }
+interface CurrentUser {
+  id: number;
+  email: string;
+  role: 'admin' | 'ca_user' | 'member';
+  company_id: number;
+}
 
 type SortField = "name" | "status" | "numberOfUsers";
 type StatusFilter = "all" | "active" | "inactive";
@@ -30,7 +37,46 @@ export default function CompanyTable({
   onBulkDelete,
 }: CompanyTableProps) {
   const router = useRouter();
-  const [data, setData] = useState(companies);
+ const currentUser = useCurrentUser();
+
+// Giả sử CurrentUser định nghĩa như sau:
+type CurrentUser = {
+  sub: number | string;
+  email: string;
+  role: 'admin' | 'ca_user' | 'member';
+};
+
+const user = currentUser as CurrentUser;
+
+// Sửa lỗi NaN: đảm bảo luôn parse được ID dạng số
+const userId = typeof user?.sub === "number" ? user.sub : parseInt(user?.sub as string, 10);
+
+// Kiểm tra vai trò
+const isAdmin = user?.role === 'admin';
+const isCaUser = user?.role === 'ca_user';
+
+// Lọc công ty dựa trên vai trò người dùng
+const visibleCompanies = useMemo(() => {
+  if (isAdmin) return companies;
+
+  if (isCaUser && userId) {
+    return companies.filter((company) =>
+      company.users?.some(
+        (u) => u.id === userId && u.role === 'ca_user'
+      )
+    );
+  }
+
+  return [];
+}, [companies, isAdmin, isCaUser, userId]);
+
+
+  const [data, setData] = useState(visibleCompanies);
+  
+    useEffect(() => {
+    setData(visibleCompanies);
+  }, [visibleCompanies]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -141,6 +187,9 @@ export default function CompanyTable({
       : `${base} bg-red-100 text-red-800`;
   };
 
+  
+ 
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -167,19 +216,23 @@ export default function CompanyTable({
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleAdd}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Thêm công ty
-          </button>
-          <button
-            onClick={handleBulkDelete}
-            disabled={selectedIds.length === 0}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            Xoá đã chọn ({selectedIds.length})
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleAdd}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Thêm công ty
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedIds.length === 0}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Xoá đã chọn ({selectedIds.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -194,16 +247,18 @@ export default function CompanyTable({
           <thead className="bg-gray-50">
             <tr>
               <th className="px-3 py-3 border-b text-left">
-                <input
-                  type="checkbox"
-                  checked={
-                    paginatedCompanies.length > 0 &&
-                    paginatedCompanies.every((c) => selectedIds.includes(c.id))
-                  }
-                  onChange={toggleSelectAll}
-                />
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={
+                      paginatedCompanies.length > 0 &&
+                      paginatedCompanies.every((c) => selectedIds.includes(c.id))
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                )}
               </th>
-              <th className="px-3 py-3 border-b text-left">Tài khoản</th>
+              {isAdmin && <th className="px-3 py-3 border-b text-left">Tài khoản</th>}
               <th
                 className="px-3 py-3 border-b text-left cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort("name")}
@@ -228,7 +283,7 @@ export default function CompanyTable({
           <tbody>
             {paginatedCompanies.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-6 text-gray-500">
+                <td colSpan={isAdmin ? 6 : 5} className="text-center py-6 text-gray-500">
                   Không có công ty nào
                 </td>
               </tr>
@@ -236,40 +291,44 @@ export default function CompanyTable({
               paginatedCompanies.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-3 py-3 border-b">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(c.id)}
-                      onChange={() => toggleSelect(c.id)}
-                    />
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(c.id)}
+                        onChange={() => toggleSelect(c.id)}
+                      />
+                    )}
                   </td>
-                  <td className="px-3 py-3 border-b text-gray-600">
-                    {(() => {
-                      const caUsers = Array.isArray(c.users)
-                        ? c.users.filter((u) => u.role === "ca_user")
-                        : [];
+                  {isAdmin && (
+                    <td className="px-3 py-3 border-b text-gray-600">
+                      {(() => {
+                        const caUsers = Array.isArray(c.users)
+                          ? c.users.filter((u) => u.role === "ca_user")
+                          : [];
 
-                      if (caUsers.length === 0) return c.account ?? "";
+                        if (caUsers.length === 0) return c.account ?? "";
 
-                      const first = caUsers[0]?.email;
-                      const remaining = caUsers.length - 1;
+                        const first = caUsers[0]?.email;
+                        const remaining = caUsers.length - 1;
 
-                      const tooltipId = `tooltip-${c.id}`;
+                        const tooltipId = `tooltip-${c.id}`;
 
-                      return (
-                        <div>
-                          <span data-tooltip-id={tooltipId} className="cursor-pointer underline underline-offset-2">
-                            {first}
-                            {remaining > 0 && ` +${remaining} người`}
-                          </span>
-                          <Tooltip id={tooltipId} place="top">
-                            <div className="text-sm text-left whitespace-pre-line">
-                              {caUsers.map((u) => u.email).join("\n")}
-                            </div>
-                          </Tooltip>
-                        </div>
-                      );
-                    })()}
-                  </td>
+                        return (
+                          <div>
+                            <span data-tooltip-id={tooltipId} className="cursor-pointer underline underline-offset-2">
+                              {first}
+                              {remaining > 0 && ` +${remaining} người`}
+                            </span>
+                            <Tooltip id={tooltipId} place="top">
+                              <div className="text-sm text-left whitespace-pre-line">
+                                {caUsers.map((u) => u.email).join("\n")}
+                              </div>
+                            </Tooltip>
+                          </div>
+                        );
+                      })()}
+                    </td>
+                  )}
 
 
                   <td className="px-3 py-3 border-b font-medium">{c.name}</td>
@@ -287,12 +346,14 @@ export default function CompanyTable({
                       >
                         Sửa
                       </button>
-                      <button
-                        onClick={() => handleDeleteCompany(c)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Xoá
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteCompany(c)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          Xoá
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

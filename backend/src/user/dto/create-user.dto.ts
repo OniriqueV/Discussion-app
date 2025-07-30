@@ -7,7 +7,10 @@ export enum UserRole {
   COMPANY_ACCOUNT = 'ca_user',
   MEMBER = 'member',
 }
-
+export enum UserStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
 export class CreateUserDto {
   @IsEmail({}, { message: 'Email phải có định dạng hợp lệ' })
   email: string;
@@ -35,4 +38,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsDateString({}, { message: 'Ngày sinh phải có định dạng hợp lệ (YYYY-MM-DD)' })
   day_of_birth?: string;
+
+  @IsOptional()
+  @IsEnum(UserStatus, { message: 'Status phải là active hoặc inactive' })
+  status?: UserStatus;
 }

@@ -38,7 +38,7 @@ export default function CompanyForm({ initialData ,onSubmit}: Props) {
   const [preview, setPreview] = useState<string | null>(initialData?.logo || null);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(initialData?.logo || null);
-
+  const API_URL= process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
   const {
     register,
     handleSubmit,
@@ -69,43 +69,21 @@ export default function CompanyForm({ initialData ,onSubmit}: Props) {
   };
 
 
-  // const onSubmit = async (data: FormValues) => {
-  //   try {
-  //     const formData = new FormData();
-  //     formData.append("name", data.name);
-  //     formData.append("address", data.address);
-  //     formData.append("maxUsers", String(data.maxUsers));
-  //     formData.append("expiredAt", data.expiredAt?.toISOString() || "");
-  //     formData.append("active", String(data.active));
 
-  //     if (file) {
-  //       formData.append("file", file); // send file
-  //     } else if (initialData?.logo) {
-  //       formData.append("logo", initialData.logo); // fallback if editing without new file
-  //     }
+useEffect(() => {
+  if (initialData?.logo) {
+    const logoUrl =
+      initialData.logo.startsWith("http")
+        ? initialData.logo
+        : initialData.logo.startsWith("/uploads/")
+          ? `${API_URL}${initialData.logo}`
+          : `${API_URL}/uploads/company-logos/${initialData.logo}`;
 
-  //     const res = await fetch(isEdit ? "/api/companies/update" : "/api/companies", {
-  //       method: "POST",
-  //       body: formData,
-  //     });
+    setPreview(logoUrl);
+    setFileName(initialData.logo.split("/").pop() ?? initialData.logo);
+  }
+}, [initialData]);
 
-  //     if (!res.ok) throw new Error("Upload failed");
-
-  //     const result = await res.json();
-
-  //     toast.success(isEdit ? "Cập nhật công ty thành công" : "Thêm công ty thành công");
-  //     router.push("/companies");
-  //   } catch (e) {
-  //     toast.error("Đã xảy ra lỗi khi lưu");
-  //   }
-  // };
-
-  useEffect(() => {
-    if (initialData?.logo) {
-      setPreview(initialData.logo);
-      setFileName(initialData.logo.split("/").pop() ?? initialData.logo);
-    }
-  }, [initialData]);
 
   return (
     <div className="relative max-w-xl mx-auto p-6">
@@ -152,12 +130,16 @@ export default function CompanyForm({ initialData ,onSubmit}: Props) {
             <span className="text-sm text-gray-600 mt-1 block">Đã chọn: {fileName}</span>
           )}
           {preview && (
-            <img
-              src={preview}
-              alt="Logo preview"
-              className="h-20 mt-2 rounded border object-contain"
-            />
+              <img
+                src={preview || ""}
+                alt="Logo preview"
+                className="h-20 mt-2 rounded border object-contain"
+              />
+
+
           )}
+
+
         </div>
 
         <div>
@@ -198,7 +180,7 @@ export default function CompanyForm({ initialData ,onSubmit}: Props) {
                 onChange={onChange}
                 error={errors.expiredAt?.message}
                 minDate={new Date(1925, 0, 1)}
-                maxDate={new Date()}
+                maxDate={new Date(2100, 11, 31)}
                 showYearDropdown
                 showMonthDropdown
               />

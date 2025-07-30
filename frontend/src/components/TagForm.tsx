@@ -1,20 +1,38 @@
-"use client"
+"use client";
+
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { useEffect } from "react";
+import { tagApi } from "@/api/tag";
 
-export default function TagForm({ initialData }: { initialData?: { name: string } }) {
+export default function TagForm({ initialData, slug }: { initialData?: { name: string }, slug?: string }) {
   const router = useRouter();
-  const { register, handleSubmit, formState: { errors } } = useForm<{ name: string }>({
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<{ name: string }>({
     defaultValues: { name: initialData?.name || "" },
   });
 
-  const isEdit = !!initialData;
+  const isEdit = !!slug;
+
+  useEffect(() => {
+    if (initialData) {
+      reset({ name: initialData.name });
+    }
+  }, [initialData, reset]);
 
   const onSubmit = async (data: { name: string }) => {
-    await new Promise((r) => setTimeout(r, 500));
-    toast.success(isEdit ? "Cập nhật tag thành công" : "Tạo tag thành công");
-    router.push("/tags");
+    try {
+      if (isEdit && slug) {
+        await tagApi.update(slug, data);
+        toast.success("Cập nhật tag thành công");
+      } else {
+        await tagApi.create(data);
+        toast.success("Tạo tag thành công");
+      }
+      router.push("/tags");
+    } catch (error: any) {
+      toast.error("Lỗi: " + (error.message || "Không thể gửi form"));
+    }
   };
 
   return (

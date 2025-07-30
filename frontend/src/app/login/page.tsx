@@ -41,31 +41,31 @@ export default function LoginPage() {
   //   router.push("/dashboard");
   // }
     function handleCredentialResponse(response: any) {
-    const idToken = response.credential;
+      const idToken = response.credential;
 
-    fetch("http://localhost:3001/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id_token: idToken }), // ✅ phải đúng tên "id_token"
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.message || "Unknown error");
-        }
-        return res.json(); // <-- tại đây lấy đúng object có { user, token }
+      fetch("http://localhost:3001/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id_token: idToken }), // ✅ phải đúng tên "id_token"
       })
-      .then((data) => {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        localStorage.setItem("token", data.token); // ✅ Lưu token đúng dạng string
-        localStorage.setItem("cre",response.credential);
-        router.push("/dashboard");
-      })
-      .catch((err) => {
-        alert("Lỗi đăng nhập: " + err.message);
-      });
+        .then(async (res) => {
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || "Unknown error");
+          }
+          return res.json(); // <-- tại đây lấy đúng object có { user, token }
+        })
+        .then((data) => {
+          localStorage.setItem("user", JSON.stringify(data.user));
+          localStorage.setItem("token", data.token); // ✅ Lưu token đúng dạng string
+          localStorage.setItem("cre",response.credential);
+          router.push("/dashboard");
+        })
+        .catch((err) => {
+          alert("Lỗi đăng nhập: " + err.message);
+        });
   }
 
 

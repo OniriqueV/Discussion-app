@@ -14,6 +14,7 @@ import {
   HttpStatus,
   HttpCode,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -30,11 +31,11 @@ import { multerCompanyLogoConfig } from 'src/common/config/multer-config';
 @Controller('companies')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
-@Roles('admin')
 export class CompanyController {
   constructor(private readonly companyService: CompanyService) {}
 
   @Post()
+  @Roles('admin')
   @ApiOperation({ summary: 'Create a new company' })
   @ApiResponse({ status: 201, description: 'Company created successfully', type: CompanyResponseDto })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -44,43 +45,54 @@ export class CompanyController {
   }
 
   @Get()
+  @Roles('admin', 'ca_user')
   @ApiOperation({ summary: 'Get all companies with pagination' })
   @ApiResponse({ status: 200, description: 'Companies retrieved successfully' })
   async findAll(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
+    @Request() req?: any,
   ) {
-    return await this.companyService.findAll(+page, +limit, search);
+    const user = req?.user;
+    return await this.companyService.findAll(+page, +limit, search, user);
   }
 
   @Get(':id')
+  @Roles('admin', 'ca_user')
   @ApiOperation({ summary: 'Get company by ID' })
   @ApiResponse({ status: 200, description: 'Company found', type: CompanyResponseDto })
   @ApiResponse({ status: 404, description: 'Company not found' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return await this.companyService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req?: any) {
+    const user = req?.user;
+    return await this.companyService.findOne(id, user);
   }
 
   @Get(':id/stats')
+  @Roles('admin', 'ca_user')
   @ApiOperation({ summary: 'Get company statistics' })
   @ApiResponse({ status: 200, description: 'Company statistics retrieved successfully' })
-  async getStats(@Param('id', ParseIntPipe) id: number) {
-    return await this.companyService.getCompanyStats(id);
+  async getStats(@Param('id', ParseIntPipe) id: number, @Request() req?: any) {
+    const user = req?.user;
+    return await this.companyService.getCompanyStats(id, user);
   }
 
   @Patch(':id')
+  @Roles('admin', 'ca_user')
   @ApiOperation({ summary: 'Update company' })
   @ApiResponse({ status: 200, description: 'Company updated successfully', type: CompanyResponseDto })
   @ApiResponse({ status: 404, description: 'Company not found' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCompanyDto: UpdateCompanyDto,
+    @Request() req?: any,
   ) {
-    return await this.companyService.update(id, updateCompanyDto);
+    const user = req?.user;
+    return await this.companyService.update(id, updateCompanyDto, user);
   }
 
   @Delete(':id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Delete company (soft delete)' })
   @ApiResponse({ status: 200, description: 'Company deleted successfully' })
   @ApiResponse({ status: 404, description: 'Company not found' })
@@ -91,17 +103,20 @@ export class CompanyController {
   }
 
   @Post(':id/upload-logo')
-    @UseInterceptors(FileInterceptor('logo', multerCompanyLogoConfig))
-    @ApiConsumes('multipart/form-data')
-    async uploadLogo(
+  @Roles('admin', 'ca_user')
+  @UseInterceptors(FileInterceptor('logo', multerCompanyLogoConfig))
+  @ApiConsumes('multipart/form-data')
+  async uploadLogo(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
-    ) {
+    @Request() req?: any,
+  ) {
     if (!file) {
         throw new BadRequestException('No file uploaded');
     }
 
+    const user = req?.user;
     const logoUrl = `/uploads/company-logos/${file.filename}`;
-    return await this.companyService.uploadLogo(id, logoUrl);
-    }
+    return await this.companyService.uploadLogo(id, logoUrl, user);
+  }
 }

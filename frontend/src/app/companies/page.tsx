@@ -10,7 +10,7 @@ import { Company } from "@/mock/companies";
 import { toast } from "react-toastify";
 
 export default function CompaniesPage() {
-  useAuthRedirect("admin");
+  useAuthRedirect("admin", "ca_user");
 
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -57,7 +57,7 @@ export default function CompaniesPage() {
       toast.error("Không thể xoá hàng loạt");
     }
   };
-
+  
   return (
     <>
       <Header showCompanies={false} />

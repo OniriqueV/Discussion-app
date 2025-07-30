@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -7,6 +7,30 @@ import { Prisma } from '@prisma/client';
 @Injectable()
 export class CompanyService {
   constructor(private prisma: PrismaService) {}
+
+  private async checkCompanyAccess(user: any, companyId: number) {
+  if (user.role === 'admin') return;
+
+  if (user.role === 'ca_user') {
+    const isMember = await this.prisma.user.findFirst({
+      where: {
+        id: user.sub, // hoặc user.id nếu bạn parse rồi
+        company_id: companyId,
+        role: 'ca_user',
+        deleted_at: null,
+      },
+    });
+
+    if (!isMember) {
+      throw new ForbiddenException('Bạn không có quyền với công ty này');
+    }
+
+    return;
+  }
+
+  throw new ForbiddenException('Bạn không có quyền truy cập');
+}
+
 
   async create(createCompanyDto: CreateCompanyDto) {
     try {
@@ -56,11 +80,10 @@ export class CompanyService {
     }
   }
 
-
-  async findAll(page: number = 1, limit: number = 10, search?: string) {
+  async findAll(page: number = 1, limit: number = 10, search?: string, user?: any) {
     const skip = (page - 1) * limit;
     
-    const where: Prisma.CompanyWhereInput = {
+    let where: Prisma.CompanyWhereInput = {
       deleted_at: null,
       ...(search && {
         OR: [
@@ -69,6 +92,11 @@ export class CompanyService {
         ],
       }),
     };
+
+    // Nếu là ca_user, chỉ hiển thị công ty của họ
+    if (user && user.role === 'ca_user') {
+      where.id = user.company_id;
+    }
 
     const [companies, total] = await Promise.all([
       this.prisma.company.findMany({
@@ -99,18 +127,24 @@ export class CompanyService {
 
     return {
       data: companies,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, user?: any) {
+    // Kiểm tra quyền truy cập
+    if (user) {
+      await this.checkCompanyAccess(user, id);
+    }
+
     const company = await this.prisma.company.findFirst({
-      where: { id, deleted_at: null },
+      where: {
+        id,
+        deleted_at: null,
+      },
       include: {
         users: {
           select: {
@@ -119,25 +153,7 @@ export class CompanyService {
             full_name: true,
             role: true,
             status: true,
-            created_at: true,
           },
-        },
-        posts: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            created_at: true,
-            user: {
-              select: {
-                id: true,
-                full_name: true,
-                email: true,
-              },
-            },
-          },
-          take: 10,
-          orderBy: { created_at: 'desc' },
         },
         _count: {
           select: {
@@ -155,7 +171,12 @@ export class CompanyService {
     return company;
   }
 
-  async update(id: number, updateCompanyDto: UpdateCompanyDto) {
+  async update(id: number, updateCompanyDto: UpdateCompanyDto, user?: any) {
+    // Kiểm tra quyền truy cập
+    if (user) {
+      await this.checkCompanyAccess(user, id);
+    }
+
     const existingCompany = await this.findOne(id);
     
     try {
@@ -163,9 +184,9 @@ export class CompanyService {
         where: { id },
         data: {
         ...updateCompanyDto,
-        max_users: updateCompanyDto.max_users
-          ? Number(updateCompanyDto.max_users)
-          : undefined,
+        ...(updateCompanyDto.max_users !== undefined && updateCompanyDto.max_users !== null
+          ? { max_users: Number(updateCompanyDto.max_users) }
+          : {}),
         expired_time: updateCompanyDto.expired_time
           ? new Date(updateCompanyDto.expired_time)
           : undefined,
@@ -226,7 +247,12 @@ export class CompanyService {
     });
   }
 
-  async uploadLogo(id: number, logoUrl: string) {
+  async uploadLogo(id: number, logoUrl: string, user?: any) {
+    // Kiểm tra quyền truy cập
+    if (user) {
+      await this.checkCompanyAccess(user, id);
+    }
+
     const company = await this.findOne(id);
     
     return await this.prisma.company.update({
@@ -246,67 +272,60 @@ export class CompanyService {
     });
   }
 
-  async getCompanyStats(id: number) {
-    const company = await this.findOne(id); // đảm bảo công ty tồn tại
-
-    const stats = await this.prisma.company.findUnique({
-        where: { id },
-        select: {
-        id: true,
-        name: true,
-        _count: {
-            select: {
-            users: true,
-            posts: true,
-            },
-        },
-        users: {
-            select: {
-            role: true,
-            status: true,
-            },
-        },
-        posts: {
-            select: {
-            status: true,
-            created_at: true,
-            },
-        },
-        },
-    });
-
-    if (!stats) {
-        throw new NotFoundException(`Stats not found for company ID ${id}`);
+  async getCompanyStats(id: number, user?: any) {
+    // Kiểm tra quyền truy cập
+    if (user) {
+      await this.checkCompanyAccess(user, id);
     }
 
-    const usersByRole = stats.users.reduce((acc, user) => {
-        acc[user.role] = (acc[user.role] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
+    const company = await this.findOne(id);
 
-    const usersByStatus = stats.users.reduce((acc, user) => {
-        acc[user.status] = (acc[user.status] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-    const postsByStatus = stats.posts.reduce((acc, post) => {
-        if (post.status) {
-        acc[post.status] = (acc[post.status] || 0) + 1;
-        }
-        return acc;
-    }, {} as Record<string, number>);
+    const [totalUsers, activeUsers, totalPosts, recentPosts] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          company_id: id,
+          deleted_at: null,
+        },
+      }),
+      this.prisma.user.count({
+        where: {
+          company_id: id,
+          status: 'active',
+          deleted_at: null,
+        },
+      }),
+      this.prisma.post.count({
+        where: {
+          company_id: id,
+          deleted_at: null,
+        },
+      }),
+      this.prisma.post.findMany({
+        where: {
+          company_id: id,
+          deleted_at: null,
+        },
+        take: 5,
+        orderBy: { created_at: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              full_name: true,
+            },
+          },
+        },
+      }),
+    ]);
 
     return {
-        company: {
-        id: stats.id,
-        name: stats.name,
-        },
-        totalUsers: stats._count.users,
-        totalPosts: stats._count.posts,
-        usersByRole,
-        usersByStatus,
-        postsByStatus,
+      company,
+      stats: {
+        totalUsers,
+        activeUsers,
+        totalPosts,
+        recentPosts,
+      },
     };
-    }
-
+  }
 }
