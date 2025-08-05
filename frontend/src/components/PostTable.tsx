@@ -187,7 +187,7 @@ export default function PostTable({
 
   // Permission check functions
   const canEdit = (post: Post) => {
-    console.log('currentUser.id:', currentUser?.id, 'post.user_id:', post.user_id);
+    // console.log('currentUser.id:', currentUser?.id, 'post.user_id:', post.user_id);
     return currentUser?.id === post.user_id;
   };
 

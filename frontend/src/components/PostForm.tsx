@@ -21,6 +21,10 @@ interface PostFormProps {
   postId?: number;
 }
 
+type PostWithTags = Post & {
+  tags: { id: number }[];
+};
+
 export default function PostForm({ postId }: PostFormProps) {
   const router = useRouter();
   const { user: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -28,6 +32,8 @@ export default function PostForm({ postId }: PostFormProps) {
   const [initialPost, setInitialPost] = useState<Post | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  // Track uploaded temp images for new posts
+  const [tempImageUrls, setTempImageUrls] = useState<string[]>([]);
 
   const {
     register,
@@ -48,25 +54,24 @@ export default function PostForm({ postId }: PostFormProps) {
   });
 
   const watchedTagIds = watch("tag_ids") || [];
-  type PostWithTags = Post & {
-  tags: { id: number }[];
-};
+
   // Load tags for the form
   useEffect(() => {
-  const fetchTags = async () => {
-    try {
-      const res = await tagApi.findAllPublic();
-      setTags(res.data);
-    } catch (error) {
-      console.error("Lỗi khi tải danh sách tag:", error);
-      toast.error("Không thể tải danh sách tag");
-    }
-  };
+    const fetchTags = async () => {
+      try {
+        const res = await tagApi.findAllPublic();
+        setTags(res.data);
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách tag:", error);
+        toast.error("Không thể tải danh sách tag");
+      }
+    };
 
-  fetchTags();
-}, []);
+    fetchTags();
+  }, []);
+
   // Load topics for the form
-    useEffect(() => {
+  useEffect(() => {
     const fetchTopics = async () => {
       try {
         const res = await topicApi.findAllPublic();
@@ -79,6 +84,7 @@ export default function PostForm({ postId }: PostFormProps) {
 
     fetchTopics();
   }, []);
+
   // Check authentication
   useEffect(() => {
     if (!userLoading && !currentUser) {
@@ -141,42 +147,74 @@ export default function PostForm({ postId }: PostFormProps) {
 
   const handleImageUpload = async (file: File): Promise<string> => {
     try {
-      // If we're editing a post, upload to that post
       if (postId) {
+        // If we're editing a post, upload directly to that post
         const result = await uploadPostImages(postId, [file]);
+        
+        // Reload post data to get updated images
+        const updatedPost = await getPost(postId);
+        setInitialPost(updatedPost);
+        
         // Return the URL of the uploaded image
         return result.images[result.images.length - 1];
       } else {
-        // For new posts, upload to Next.js API route
-        const formData = new FormData();
-        formData.append('file', file);
+        // For new posts, try to upload via API first
+        try {
+          const result = await uploadTempImages([file]);
+          const imageUrl = result.images[0];
+          
+          // Track temp images for cleanup/reference
+          setTempImageUrls(prev => [...prev, imageUrl]);
+          
+          return imageUrl;
+        } catch (apiError) {
+          console.warn("API upload failed, trying Next.js API route:", apiError);
+          
+          // Fallback to Next.js API route
+          const formData = new FormData();
+          formData.append('file', file);
 
-        const response = await fetch('/api/uploads/temp', {
-          method: 'POST',
-          body: formData,
-        });
+          const response = await fetch('/api/uploads/temp', {
+            method: 'POST',
+            body: formData,
+          });
 
-        if (!response.ok) {
-          throw new Error('Upload failed');
+          if (!response.ok) {
+            throw new Error('Next.js API upload failed');
+          }
+
+          const data = await response.json();
+          return data.url;
         }
-
-        const data = await response.json();
-        return data.url;
       }
     } catch (error: any) {
       console.error("Error uploading image:", error);
+      toast.error("Lỗi khi tải ảnh lên. Vui lòng thử lại.");
       
-      // Fallback to blob URL if upload fails
-      console.warn("Upload failed, using blob URL as fallback");
+      // As last resort, use blob URL (but warn user)
+      toast.warning("Đang sử dụng ảnh tạm thời. Vui lòng lưu bài viết để hoàn tất upload.");
       return URL.createObjectURL(file);
     }
   };
 
+  // Function to extract image URLs from HTML content
+  const extractImageUrls = (content: string): string[] => {
+    const imgRegex = /<img[^>]+src="([^">]+)"/g;
+    const urls: string[] = [];
+    let match;
+    
+    while ((match = imgRegex.exec(content)) !== null) {
+      urls.push(match[1]);
+    }
+    
+    return urls;
+  };
 
   // Function to fix image URLs in content
   const fixImageUrls = (content: string): string => {
     // Replace relative paths with absolute paths
-    return content.replace(/src="\.\.\/uploads\/temp\//g, 'src="/uploads/temp/');
+    return content.replace(/src="\.\.\/uploads\/temp\//g, 'src="/uploads/temp/')
+           .replace(/src="uploads\/temp\//g, 'src="/uploads/temp/');
   };
 
   // Form submission handler
@@ -209,17 +247,31 @@ export default function PostForm({ postId }: PostFormProps) {
         // Update existing post
         await updatePost(postId, postData);
         toast.success("Cập nhật bài viết thành công!");
+        
+        // Reload post to show updated content
+        // const updatedPost = await getPost(postId);
+        // setInitialPost(updatedPost);
       } else {
         // Create new post
         const newPost = await createPost(postData);
         toast.success("Tạo bài viết mới thành công!");
+        
+        // Clear temp images tracking
+        setTempImageUrls([]);
         
         // Redirect to the new post detail page
         router.push(`/posts/detail/${newPost.id}`);
         return;
       }
       
-      router.push("/posts");
+      // For edit mode, stay on the same page to show updated content
+      if (postId) {
+        toast.success("Bài viết đã được cập nhật. Đang tải lại...");
+        // Optional: Reload the page or just stay here
+        // router.push(`/posts/detail/${postId}`);
+      } else {
+        router.push("/posts");
+      }
     } catch (error: any) {
       console.error("Error saving post:", error);
       
@@ -383,7 +435,6 @@ export default function PostForm({ postId }: PostFormProps) {
                       type="checkbox"
                       checked={watchedTagIds.includes(tag.id.toString())}
                       onChange={() => handleCheckboxChange(tag.id.toString())}
-
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
                     <span className="text-sm font-medium text-gray-700">
@@ -391,15 +442,14 @@ export default function PostForm({ postId }: PostFormProps) {
                     </span>
                   </label>
                 ))}
-
               </div>
             </div>
 
-            {/* Show current images if editing */}
-            {initialPost?.images && initialPost.images.length > 0 && (
+            {/* Show current images if editing  */}
+            {/* {initialPost?.images && initialPost.images.length > 0 && (
               <div className="space-y-3">
                 <label className="block text-sm font-semibold text-gray-700">
-                  Hình ảnh hiện tại
+                  Hình ảnh hiện tại ({initialPost.images.length} ảnh)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                   {initialPost.images.map((image, index) => (
@@ -408,12 +458,46 @@ export default function PostForm({ postId }: PostFormProps) {
                         src={image}
                         alt={`Image ${index + 1}`}
                         className="w-full h-24 object-cover rounded-lg border"
+                        onError={(e) => {
+                          // Handle broken image links
+                          console.warn(`Failed to load image: ${image}`);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
                       />
+                      <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                        {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-600">
+                  💡 Tip: Bạn có thể thêm ảnh mới bằng cách sử dụng nút "Image" trong trình soạn thảo ở trên.
+                </p>
+              </div>
+            )} */}
+
+            {/* Show temp images for new posts */}
+            {/* {!postId && tempImageUrls.length > 0 && (
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Ảnh đã tải lên ({tempImageUrls.length} ảnh)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {tempImageUrls.map((url, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={url}
+                        alt={`Temp image ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border"
+                      />
+                      <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-1 rounded">
+                        Mới
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-gray-200">

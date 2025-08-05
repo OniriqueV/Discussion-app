@@ -32,6 +32,8 @@ import {
 import { useCurrentUser } from '@/hooks/useAuthRedirect';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { useRouter } from "next/navigation"; // thêm nếu chưa import
+
 
 interface CommentCardProps {
   comment: Comment;
@@ -315,7 +317,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
-
+  const router = useRouter(); // khai báo trong component PostDetail
   // Load post and comments
   useEffect(() => {
     const loadPostAndComments = async () => {
@@ -621,10 +623,13 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link href="/posts" className="flex items-center text-gray-600 hover:text-gray-900">
+              <button
+                onClick={() => router.back()}
+                className="flex items-center text-gray-600 hover:text-gray-900"
+              >
                 <ArrowLeft className="h-5 w-5 mr-1" />
-                Danh sách bài viết
-              </Link>
+                Quay lại
+              </button>
             </div>
             <div className="flex items-center space-x-4">
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
@@ -667,7 +672,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
             </div>
 
             {/* Display images if any */}
-            {post.images && post.images.length > 0 && (
+            {/* {post.images && post.images.length > 0 && (
               <div className="mb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {post.images.map((image, index) => (
@@ -680,7 +685,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
 
             <div className="flex items-center justify-between pt-6 border-t border-gray-200">
               <div className="flex items-center space-x-6">

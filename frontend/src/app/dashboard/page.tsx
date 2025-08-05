@@ -40,21 +40,21 @@ const StatsCard = ({ title, value, icon: Icon, color = "blue", isLoading = false
 
 interface TopicCardProps {
   topic: Topic;
-  posts: Post[];
-  comments: number;
+  allPosts: Post[];
 }
 
-const TopicCard = ({ topic, posts, comments }: TopicCardProps) => {
-  const topicPosts = posts.filter(post => post.topic_id === parseInt(topic.id));
+const TopicCard = ({ topic, allPosts }: TopicCardProps) => {
+  const topicPosts = allPosts.filter(post => post.topic_id === parseInt(topic.id));
   const resolvedPosts = topicPosts.filter(post => post.status === "solve");
   const unresolvedPosts = topicPosts.filter(post => post.status === "problem");
+  const totalComments = topicPosts.reduce((sum, post) => sum + (post.comments_count || 0), 0);
 
   return (
     <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">{topic.name}</h3>
         <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-          {topic._count?.posts || 0} posts
+          {topicPosts.length} posts
         </span>
       </div>
 
@@ -69,7 +69,7 @@ const TopicCard = ({ topic, posts, comments }: TopicCardProps) => {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Comments</span>
-          <span className="font-medium text-gray-900">{comments}</span>
+          <span className="font-medium text-gray-900">{totalComments}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Created</span>
@@ -107,7 +107,7 @@ const PostCard = ({ post, topicName }: PostCardProps) => {
   };
 
   return (
-    <Link href={`/posts/${post.id}`} className="block">
+    <Link href={`/posts/detail/${post.id}`} className="block">
       <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{post.title}</h3>
@@ -250,7 +250,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
 
 export default function ModernDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [allPosts, setAllPosts] = useState<Post[]>([]); // Store all posts for statistics
   const [topics, setTopics] = useState<Topic[]>([]);
   const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
   const [showAllTopics, setShowAllTopics] = useState(false);
@@ -268,31 +268,38 @@ export default function ModernDashboard() {
   const { user, isLoading } = useCurrentUser();
   const itemsPerPage = 6;
 
-  // Load initial data
+  // Load initial data including all posts for statistics
   useEffect(() => {
     const loadInitialData = async () => {
       try {
         setLoading(true);
         
-        // Load topics and posts in parallel
-        const [topicsResponse, postsResponse] = await Promise.all([
+        // Load topics and initial posts in parallel
+        const [topicsResponse, postsResponse, allPostsResponse] = await Promise.all([
           topicApi.findAllPublic(),
-          getPosts({ page: 1, limit: itemsPerPage })
+          getPosts({ page: 1, limit: itemsPerPage }),
+          getPosts({ page: 1, limit: 1000 }) // Get more posts for statistics
         ]);
+        
 
         if (topicsResponse.success) {
           setTopics(topicsResponse.data);
         }
-
+        
         if (postsResponse.data) {
-          setPosts(postsResponse.data);
           setFilteredPosts(postsResponse.data);
           setPagination({
-            total: postsResponse.total || 0,
-            totalPages: postsResponse.totalPages || 1,
-            currentPage: postsResponse.page || 1,
-            limit: postsResponse.limit || itemsPerPage
+            total: postsResponse.meta?.total ?? postsResponse.data.length,
+            totalPages: postsResponse.meta?.totalPages ?? 1,
+            currentPage: postsResponse.meta?.page ?? 1,
+            limit: postsResponse.meta?.limit ?? itemsPerPage
           });
+        }
+
+
+        // Store all posts for statistics calculation
+        if (allPostsResponse.data) {
+          setAllPosts(allPostsResponse.data);
         }
 
       } catch (error) {
@@ -315,14 +322,16 @@ export default function ModernDashboard() {
         try {
           setPostsLoading(true);
           const response = await getPosts({ page: 1, limit: itemsPerPage });
+          
           if (response.data) {
             setFilteredPosts(response.data);
             setPagination({
-              total: response.total || 0,
-              totalPages: response.totalPages || 1,
-              currentPage: 1,
-              limit: response.limit || itemsPerPage
+              total: response.meta?.total ?? response.data.length,
+              totalPages: response.meta?.totalPages ?? 1,
+              currentPage: response.meta?.page ?? 1,
+              limit: response.meta?.limit ?? itemsPerPage
             });
+
           }
         } catch (error) {
           console.error("Error loading posts:", error);
@@ -340,16 +349,23 @@ export default function ModernDashboard() {
           });
           if (response.data) {
             setFilteredPosts(response.data);
-            setPagination({
-              total: response.total || 0,
-              totalPages: response.totalPages || 1,
-              currentPage: 1,
-              limit: response.limit || itemsPerPage
-            });
+              setPagination({
+                total: response.meta?.total ?? response.data.length,
+                totalPages: response.meta?.totalPages ?? 1,
+                currentPage: response.meta?.page ?? 1,
+                limit: response.meta?.limit ?? itemsPerPage
+              });
+
           }
         } catch (error) {
           console.error("Error searching posts:", error);
           setFilteredPosts([]);
+          setPagination({
+            total: 0,
+            totalPages: 0,
+            currentPage: 1,
+            limit: itemsPerPage
+          });
         } finally {
           setPostsLoading(false);
         }
@@ -378,11 +394,12 @@ export default function ModernDashboard() {
       if (response.data) {
         setFilteredPosts(response.data);
         setPagination({
-          total: response.total || 0,
-          totalPages: response.totalPages || 1,
-          currentPage: response.page || newPage,
-          limit: response.limit || itemsPerPage
+          total: response.meta?.total ?? response.data.length,
+          totalPages: response.meta?.totalPages ?? 1,
+          currentPage: response.meta?.page ?? 1,
+          limit: response.meta?.limit ?? itemsPerPage
         });
+
         setCurrentPage(newPage);
       }
     } catch (error) {
@@ -398,10 +415,9 @@ export default function ModernDashboard() {
     return topic ? { name: topic.name } : { name: "Unknown" };
   };
 
-  // Calculate statistics
-  const totalPosts = posts.length;
-  const resolvedPosts = posts.filter(post => post.status === "solve").length;
-  const unresolvedPosts = posts.filter(post => post.status === "problem").length;
+  // Calculate statistics from all posts
+  const resolvedPosts = allPosts.filter(post => post.status === "solve").length;
+  const unresolvedPosts = allPosts.filter(post => post.status === "problem").length;
   const totalTopics = topics.length;
 
   const displayedTopics = showAllTopics ? topics : topics.slice(0, 6);
@@ -436,13 +452,13 @@ export default function ModernDashboard() {
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                {user?.avatar && (
+                {/* {user?.avatar && (
                   <img
                     src={user.avatar}
                     alt="Avatar"
                     className="w-16 h-16 rounded-full border-2 border-white shadow"
                   />
-                )}
+                )} */}
                 <div>
                   <h2 className="text-3xl font-bold mb-2">Chào mừng trở lại! 👋</h2>
                   <p className="text-blue-100 text-lg">
@@ -454,9 +470,16 @@ export default function ModernDashboard() {
                 </div>
               </div>
               <div className="hidden md:block">
-                <div className="w-32 h-32 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                  <Activity className="h-16 w-16 text-white" />
-                </div>
+                {user?.avatar && (
+                  <div className="w-32 h-32 bg-white rounded-full overflow-hidden border-4 border-white shadow-lg">
+                    <img
+                      src={user.avatar}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
@@ -466,24 +489,24 @@ export default function ModernDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatsCard 
             title="Tổng bài viết" 
-            value={pagination.total} 
+            value={allPosts.length} 
             icon={FileText} 
             color="blue" 
-            isLoading={postsLoading}
+            isLoading={loading}
           />
           <StatsCard 
             title="Đã giải quyết" 
             value={resolvedPosts} 
             icon={CheckCircle} 
             color="green" 
-            isLoading={postsLoading}
+            isLoading={loading}
           />
           <StatsCard 
             title="Chờ xử lý" 
             value={unresolvedPosts} 
             icon={Clock} 
             color="amber" 
-            isLoading={postsLoading}
+            isLoading={loading}
           />
           <StatsCard 
             title="Chủ đề" 
@@ -531,16 +554,11 @@ export default function ModernDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayedTopics.map((topic) => {
-                const topicPosts = posts.filter(post => post.topic_id === parseInt(topic.id));
-                const commentsCount = topicPosts.reduce((total, post) => total + (post.comments_count || 0), 0);
-
-                return (
-                  <Link key={topic.id} href={`/topics/${topic.id}`} className="block">
-                    <TopicCard topic={topic} posts={posts} comments={commentsCount} />
-                  </Link>
-                );
-              })}
+              {displayedTopics.map((topic) => (
+                <Link key={topic.id} href={`/topics/${topic.slug}`} className="block">
+                  <TopicCard topic={topic} allPosts={allPosts} />
+                </Link>
+              ))}
             </div>
           </div>
         )}

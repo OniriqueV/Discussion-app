@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import TopicDetail from "@/components/TopicDetail";
 import { topicApi, Topic } from "@/api/topic";
 import { toast } from "react-toastify";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default function TopicDetailPage() {
   const params = useParams();
@@ -14,7 +16,7 @@ export default function TopicDetailPage() {
 
   useEffect(() => {
     if (!slug) return;
-
+    
     const loadTopic = async () => {
       try {
         setLoading(true);
@@ -51,18 +53,19 @@ export default function TopicDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {error || "Không tìm thấy chủ đề"}
           </h1>
-          <p className="text-gray-600">Chủ đề bạn tìm kiếm không tồn tại.</p>
-          <a
-            href="/topics"
-            className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-700"
+          <p className="text-gray-600 mb-4">Chủ đề bạn tìm kiếm không tồn tại.</p>
+          <Link
+            href="/"
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
           >
-            Quay lại danh sách topics
-          </a>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Quay lại trang chủ
+          </Link>
         </div>
       </div>
     );
   }
 
-  // Pass topic ID to TopicDetail component
-  return <TopicDetail topicId={topic.id} />;
+  // Pass slug (not topic.id) to TopicDetail component since it expects slug
+  return <TopicDetail topicId={slug} />;
 }

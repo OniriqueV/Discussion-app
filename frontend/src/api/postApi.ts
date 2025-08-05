@@ -10,6 +10,29 @@ const getAuthHeaders = () => {
   };
 };
 
+// THÊM UTILITY FUNCTION
+const fixImageUrl = (imageUrl: string): string => {
+  if (!imageUrl) return '';
+  
+  // Nếu đã có protocol, trả về nguyên vẹn
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl;
+  }
+  
+  // Nếu bắt đầu bằng /uploads/, thêm API_URL
+  if (imageUrl.startsWith('/uploads/')) {
+    return `${API_URL}${imageUrl}`;
+  }
+  
+  // Nếu bắt đầu bằng uploads/, thêm API_URL và /
+  if (imageUrl.startsWith('uploads/')) {
+    return `${API_URL}/${imageUrl}`;
+  }
+  
+  return imageUrl;
+};
+
+// SỬA CÁC INTERFACE GIỮ NGUYÊN...
 export interface Post {
   id: number;
   title: string;
@@ -63,7 +86,6 @@ export interface UpdatePostData {
   tag_ids?: number[];
 }
 
-
 export interface QueryPostParams {
   page?: number;
   limit?: number;
@@ -75,27 +97,44 @@ export interface QueryPostParams {
   user_id?: number;
   include_deleted?: boolean;
   sort_by?: string;
-  sort_order?: 'asc' | 'desc'
+  sort_order?: 'asc' | 'desc';
 }
 
-// Get all posts
+// SỬA HÀM getPosts
 export const getPosts = async (params: QueryPostParams = {}) => {
   const res = await axios.get(`${API_URL}/posts`, {
     params,
     headers: getAuthHeaders(),
   });
-  return res.data;
+  
+  const result = res.data;
+  if (result.data && Array.isArray(result.data)) {
+    result.data = result.data.map((post: any) => {
+      if (post.images && Array.isArray(post.images)) {
+        post.images = post.images.map(fixImageUrl);
+      }
+      return post;
+    });
+  }
+  
+  return result;
 };
 
-// Get post by ID
+// SỬA HÀM getPost
 export const getPost = async (id: number) => {
   const res = await axios.get(`${API_URL}/posts/${id}`, {
     headers: getAuthHeaders(),
   });
-  return res.data;
+  
+  const post = res.data;
+  if (post.images && Array.isArray(post.images)) {
+    post.images = post.images.map(fixImageUrl);
+  }
+  
+  return post;
 };
 
-// Create new post
+// GIỮ NGUYÊN createPost và updatePost...
 export const createPost = async (data: CreatePostData) => {
   const res = await axios.post(`${API_URL}/posts`, data, {
     headers: getAuthHeaders(),
@@ -103,7 +142,6 @@ export const createPost = async (data: CreatePostData) => {
   return res.data;
 };
 
-// Update post
 export const updatePost = async (id: number, data: UpdatePostData) => {
   const res = await axios.patch(`${API_URL}/posts/${id}`, data, {
     headers: getAuthHeaders(),
@@ -111,7 +149,6 @@ export const updatePost = async (id: number, data: UpdatePostData) => {
   return res.data;
 };
 
-// Delete post
 export const deletePost = async (id: number) => {
   const res = await axios.delete(`${API_URL}/posts/${id}`, {
     headers: getAuthHeaders(),
@@ -119,7 +156,7 @@ export const deletePost = async (id: number) => {
   return res.data;
 };
 
-// Upload images to post
+// SỬA HÀM uploadPostImages
 export const uploadPostImages = async (id: number, files: File[]) => {
   const formData = new FormData();
   files.forEach((file) => {
@@ -132,12 +169,16 @@ export const uploadPostImages = async (id: number, files: File[]) => {
       'Content-Type': 'multipart/form-data',
     },
   });
-  return res.data;
+  
+  const result = res.data;
+  if (result.images) {
+    result.images = result.images.map(fixImageUrl);
+  }
+  
+  return result;
 };
 
-
-
-// Upload temporary images (for new posts)
+// SỬA HÀM uploadTempImages
 export const uploadTempImages = async (files: File[]) => {
   const formData = new FormData();
   files.forEach((file) => {
@@ -150,10 +191,16 @@ export const uploadTempImages = async (files: File[]) => {
       'Content-Type': 'multipart/form-data',
     },
   });
-  return res.data;
+  
+  const result = res.data;
+  if (result.images) {
+    result.images = result.images.map(fixImageUrl);
+  }
+  
+  return result;
 };
 
-// Delete image from post
+// GIỮ NGUYÊN các hàm còn lại...
 export const deletePostImage = async (id: number, imageIndex: number) => {
   const res = await axios.delete(`${API_URL}/posts/${id}/images/${imageIndex}`, {
     headers: getAuthHeaders(),
@@ -161,16 +208,25 @@ export const deletePostImage = async (id: number, imageIndex: number) => {
   return res.data;
 };
 
-// Get my posts
 export const getMyPosts = async (params: QueryPostParams = {}) => {
   const res = await axios.get(`${API_URL}/posts/my-posts`, {
     params,
     headers: getAuthHeaders(),
   });
-  return res.data;
+  
+  const result = res.data;
+  if (result.data && Array.isArray(result.data)) {
+    result.data = result.data.map((post: any) => {
+      if (post.images && Array.isArray(post.images)) {
+        post.images = post.images.map(fixImageUrl);
+      }
+      return post;
+    });
+  }
+  
+  return result;
 };
 
-// Update post status (admin/ca_user only)
 export const updatePostStatus = async (id: number, status: string) => {
   const res = await axios.patch(`${API_URL}/posts/${id}/status`, { status }, {
     headers: getAuthHeaders(),
@@ -178,10 +234,9 @@ export const updatePostStatus = async (id: number, status: string) => {
   return res.data;
 };
 
-// Toggle pin post (admin/ca_user only)
 export const togglePinPost = async (id: number) => {
   const res = await axios.patch(`${API_URL}/posts/${id}/toggle-pin`, {}, {
     headers: getAuthHeaders(),
   });
   return res.data;
-}; 
+};
