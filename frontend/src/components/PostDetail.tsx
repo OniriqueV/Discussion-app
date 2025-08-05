@@ -2,267 +2,210 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
-  User, 
   Calendar, 
   Eye, 
   MessageCircle, 
   ThumbsUp, 
-  ThumbsDown,
   CheckCircle, 
   XCircle, 
   AlertCircle,
   Pin,
-  PinOff,
-  Clock,
   Send,
-  Star,
-  Award,
-  Edit,
-  Trash2,
-  MoreHorizontal,
   Heart,
-  Reply
+  Reply,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-
-// Mock data
-const postDetailMock = {
-  id: "1",
-  title: "Fix hydration mismatch in Next.js",
-  description: "I'm getting hydration errors on my topic page. The issue seems to be related to server-side rendering and client-side rendering differences. When I navigate to the page, I see the following error in the console:\n\nWarning: Text content did not match. Server: \"Loading...\" Client: \"Actual Content\"\n\nThis happens because the server renders \"Loading...\" initially, but the client renders the actual content after hydration. How can I fix this issue?",
-  author: "admin1",
-  topicId: "1",
-  topicName: "React",
-  status: "not_resolved",
-  createdAt: "2025-06-01T10:00:00Z",
-  updatedAt: "2025-06-10T15:30:00Z",
-  isPinned: true,
-  views: 234,
-  points: 15,
-  userPoints: 1250
-};
-
-const commentsMock = [
-  {
-    id: "1",
-    postId: "1",
-    author: "dev_expert",
-    content: "This is a common issue with Next.js SSR. The problem is that your component is showing different content on the server vs client. You need to ensure that the initial render is consistent.\n\nHere's what you can do:\n1. Use a loading state that's the same on both server and client\n2. Use dynamic imports with ssr: false for client-only components\n3. Use useEffect to update the state after hydration",
-    createdAt: "2025-06-01T11:30:00Z",
-    updatedAt: "2025-06-01T11:30:00Z",
-    likes: 12,
-    dislikes: 1,
-    isResolved: true,
-    resolvedBy: "admin1",
-    resolvedAt: "2025-06-01T12:00:00Z",
-    parentId: null,
-    userPoints: 890,
-    isLiked: false,
-    isDisliked: false
-  },
-  {
-    id: "2",
-    postId: "1",
-    author: "react_dev",
-    content: "I had the same issue! What worked for me was using the `useIsomorphicLayoutEffect` hook. It ensures that the effect runs on the server during SSR and on the client during hydration.",
-    createdAt: "2025-06-01T14:20:00Z",
-    updatedAt: "2025-06-01T14:20:00Z",
-    likes: 5,
-    dislikes: 0,
-    isResolved: false,
-    parentId: null,
-    userPoints: 320,
-    isLiked: true,
-    isDisliked: false
-  },
-  {
-    id: "3",
-    postId: "1",
-    author: "nextjs_fan",
-    content: "Great explanation! Can you provide a code example of how to implement this properly?",
-    createdAt: "2025-06-01T15:45:00Z",
-    updatedAt: "2025-06-01T15:45:00Z",
-    likes: 2,
-    dislikes: 0,
-    isResolved: false,
-    parentId: "1",
-    userPoints: 150,
-    isLiked: false,
-    isDisliked: false
-  },
-  {
-    id: "4",
-    postId: "1",
-    author: "junior_dev",
-    content: "Thanks for the help! This solution worked perfectly for my project.",
-    createdAt: "2025-06-02T09:15:00Z",
-    updatedAt: "2025-06-02T09:15:00Z",
-    likes: 3,
-    dislikes: 0,
-    isResolved: false,
-    parentId: "1",
-    userPoints: 45,
-    isLiked: false,
-    isDisliked: false
-  }
-];
-
-interface Post {
-  id: string;
-  title: string;
-  description: string;
-  author: string;
-  topicId: string;
-  topicName: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  isPinned: boolean;
-  views: number;
-  points: number;
-  userPoints: number;
-}
-
-interface Comment {
-  id: string;
-  postId: string;
-  author: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  likes: number;
-  dislikes: number;
-  isResolved: boolean;
-  resolvedBy?: string;
-  resolvedAt?: string;
-  parentId?: string;
-  userPoints: number;
-  isLiked: boolean;
-  isDisliked: boolean;
-}
-
-interface User {
-  credential: string;
-  name: string;
-  role: string;
-  points: number;
-}
+import { getPost, Post } from '@/api/postApi';
+import { 
+  getCommentsByPostId, 
+  createComment, 
+  markCommentAsSolution, 
+  toggleLikeComment,
+  updateComment,
+  deleteComment,
+  Comment,
+  CreateCommentData,
+  UpdateCommentData
+} from '@/api/commentApi';
+import { useCurrentUser } from '@/hooks/useAuthRedirect';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 
 interface CommentCardProps {
   comment: Comment;
   postAuthor: string;
-  currentUser: User;
-  onToggleResolve: (commentId: string) => void;
-  onLike: (commentId: string) => void;
-  onDislike: (commentId: string) => void;
-  onReply: (commentId: string) => void;
-  replies: Comment[];
+  postAuthorId: number;
+  currentUser: any;
+  onToggleResolve: (commentId: number) => void;
+  onLike: (commentId: number) => void;
+  onReply: (parentId: number, content: string) => void;
+  onEdit: (commentId: number, content: string) => void;
+  onDelete: (commentId: number) => void;
   level: number;
 }
 
 const CommentCard: React.FC<CommentCardProps> = ({
   comment,
   postAuthor,
+  postAuthorId,
   currentUser,
   onToggleResolve,
   onLike,
-  onDislike,
   onReply,
-  replies,
+  onEdit,
+  onDelete,
   level
 }) => {
   const [showReplyForm, setShowReplyForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
   const [replyContent, setReplyContent] = useState("");
+  const [editContent, setEditContent] = useState(comment.content);
 
-  const canResolve = currentUser.name === postAuthor;
-  const isAuthor = comment.author === currentUser.name;
+  const canResolve = currentUser?.id === postAuthorId;
+  const isAuthor = comment.user?.id === currentUser?.id;
+  const canEditDelete = isAuthor || currentUser?.role === 'admin';
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (replyContent.trim()) {
-      onReply(comment.id);
+      await onReply(comment.id, replyContent);
       setReplyContent("");
       setShowReplyForm(false);
     }
   };
 
-  const getStatusColor = (isResolved: boolean) => {
-    return isResolved ? "text-green-600 bg-green-100" : "";
+  const handleEdit = async () => {
+    if (editContent.trim() && editContent !== comment.content) {
+      await onEdit(comment.id, editContent);
+      setShowEditForm(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa bình luận này?')) {
+      await onDelete(comment.id);
+    }
+  };
+
+  const renderReplies = (replies: Comment[], currentLevel: number) => {
+    if (!replies || replies.length === 0) return null;
+
+    return (
+      <div className="mt-4 space-y-4">
+        {replies.map((reply) => (
+          <CommentCard
+            key={reply.id}
+            comment={reply}
+            postAuthor={postAuthor}
+            postAuthorId={postAuthorId}
+            currentUser={currentUser}
+            onToggleResolve={onToggleResolve}
+            onLike={onLike}
+            onReply={onReply}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            level={currentLevel + 1}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
     <div className={`${level > 0 ? 'ml-8 border-l-2 border-gray-200 pl-4' : ''}`}>
-      <div className={`bg-white rounded-lg border p-4 ${comment.isResolved ? 'ring-2 ring-green-500 bg-green-50' : 'hover:shadow-md transition-shadow'}`}>
+      <div className={`bg-white rounded-lg border p-4 ${comment.is_solution ? 'ring-2 ring-green-500 bg-green-50' : 'hover:shadow-md transition-shadow'}`}>
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">
-                {comment.author.charAt(0).toUpperCase()}
+                {comment.user?.full_name?.charAt(0).toUpperCase() || 'U'}
               </span>
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-medium text-gray-900">{comment.author}</span>
-                <span className="text-xs text-gray-500">
-                  {comment.userPoints} điểm
-                </span>
-                {comment.author === postAuthor && (
+                <span className="font-medium text-gray-900">{comment.user?.full_name}</span>
+                {comment.user?.full_name === postAuthor && (
                   <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
                     Tác giả
+                  </span>
+                )}
+                {isAuthor && (
+                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                    Bạn
                   </span>
                 )}
               </div>
               <div className="flex items-center space-x-2 text-xs text-gray-500">
                 <Calendar className="h-3 w-3" />
-                <span>{new Date(comment.createdAt).toLocaleDateString('vi-VN')}</span>
-                <span>•</span>
-                <span>{new Date(comment.createdAt).toLocaleTimeString('vi-VN')}</span>
+                <span>{new Date(comment.created_at).toLocaleString('vi-VN')}</span>
+                {comment.updated_at !== comment.created_at && (
+                  <span className="text-gray-400">(đã chỉnh sửa)</span>
+                )}
               </div>
             </div>
           </div>
           
-          {comment.isResolved && (
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1 text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Đã giải quyết</span>
-              </div>
-              <div className="text-xs text-gray-500">
-                bởi {comment.resolvedBy}
-              </div>
+          {comment.is_solution && (
+            <div className="flex items-center space-x-1 text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-xs font-medium">Giải pháp</span>
             </div>
           )}
         </div>
 
         <div className="mb-4">
-          <p className="text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+          {showEditForm ? (
+            <div className="space-y-3">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={3}
+                maxLength={5000}
+              />
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">
+                  {editContent.length}/5000 ký tự
+                </span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setShowEditForm(false);
+                      setEditContent(comment.content);
+                    }}
+                    className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleEdit}
+                    disabled={!editContent.trim() || editContent === comment.content}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Lưu
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+          )}
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => onLike(comment.id)}
-                className={`flex items-center space-x-1 px-2 py-1 rounded-md transition-colors ${
-                  comment.isLiked 
-                    ? 'bg-blue-100 text-blue-600' 
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-              >
-                <ThumbsUp className="h-4 w-4" />
-                <span className="text-sm">{comment.likes}</span>
-              </button>
-              <button
-                onClick={() => onDislike(comment.id)}
-                className={`flex items-center space-x-1 px-2 py-1 rounded-md transition-colors ${
-                  comment.isDisliked 
-                    ? 'bg-red-100 text-red-600' 
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-              >
-                <ThumbsDown className="h-4 w-4" />
-                <span className="text-sm">{comment.dislikes}</span>
-              </button>
-            </div>
+            <button
+              onClick={() => onLike(comment.id)}
+              className={`flex items-center space-x-1 px-2 py-1 rounded-md transition-colors ${
+                comment.isLiked 
+                  ? 'bg-blue-100 text-blue-600' 
+                  : 'hover:bg-gray-100 text-gray-600'
+              }`}
+            >
+              <ThumbsUp className="h-4 w-4" />
+              <span className="text-sm">{comment.likes}</span>
+            </button>
             
             <button
               onClick={() => setShowReplyForm(!showReplyForm)}
@@ -271,6 +214,26 @@ const CommentCard: React.FC<CommentCardProps> = ({
               <Reply className="h-4 w-4" />
               <span className="text-sm">Trả lời</span>
             </button>
+
+            {canEditDelete && (
+              <>
+                <button
+                  onClick={() => setShowEditForm(!showEditForm)}
+                  className="flex items-center space-x-1 text-gray-600 hover:text-yellow-600 transition-colors"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span className="text-sm">Sửa</span>
+                </button>
+                
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center space-x-1 text-gray-600 hover:text-red-600 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="text-sm">Xóa</span>
+                </button>
+              </>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -278,20 +241,20 @@ const CommentCard: React.FC<CommentCardProps> = ({
               <button
                 onClick={() => onToggleResolve(comment.id)}
                 className={`flex items-center space-x-1 px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  comment.isResolved
+                  comment.is_solution
                     ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     : 'bg-green-100 text-green-600 hover:bg-green-200'
                 }`}
               >
-                {comment.isResolved ? (
+                {comment.is_solution ? (
                   <>
                     <XCircle className="h-4 w-4" />
-                    <span>Bỏ giải quyết</span>
+                    <span>Bỏ giải pháp</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle className="h-4 w-4" />
-                    <span>Đánh dấu giải quyết</span>
+                    <span>Đánh dấu giải pháp</span>
                   </>
                 )}
               </button>
@@ -308,45 +271,35 @@ const CommentCard: React.FC<CommentCardProps> = ({
               placeholder="Viết phản hồi..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
+              maxLength={5000}
             />
-            <div className="flex justify-end space-x-2 mt-2">
-              <button
-                onClick={() => setShowReplyForm(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleReply}
-                className="flex items-center space-x-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <Send className="h-4 w-4" />
-                <span>Gửi</span>
-              </button>
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-xs text-gray-500">
+                {replyContent.length}/5000 ký tự
+              </span>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowReplyForm(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleReply}
+                  disabled={!replyContent.trim()}
+                  className="flex items-center space-x-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>Gửi</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Replies */}
-      {replies.length > 0 && (
-        <div className="mt-4 space-y-4">
-          {replies.map((reply) => (
-            <CommentCard
-              key={reply.id}
-              comment={reply}
-              postAuthor={postAuthor}
-              currentUser={currentUser}
-              onToggleResolve={onToggleResolve}
-              onLike={onLike}
-              onDislike={onDislike}
-              onReply={onReply}
-              replies={[]}
-              level={level + 1}
-            />
-          ))}
-        </div>
-      )}
+      {/* Nested Replies */}
+      {comment.replies && comment.replies.length > 0 && renderReplies(comment.replies, level)}
     </div>
   );
 };
@@ -356,132 +309,230 @@ interface PostDetailProps {
 }
 
 const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Mock user authentication
-  useEffect(() => {
-    setUser({ 
-      credential: "mock-jwt-token-12345", 
-      name: "admin1", 
-      role: "admin",
-      points: 1500
-    });
-  }, []);
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   // Load post and comments
   useEffect(() => {
-    // Mock API call
-    setTimeout(() => {
-      if (postId === "1") {
-        setPost(postDetailMock);
-        setComments(commentsMock as Comment[]);
-      }
-      setLoading(false);
-    }, 500);
-  }, [postId]);
-
-  const handleAddComment = () => {
-    if (newComment.trim() && user) {
-      const comment: Comment = {
-        id: Date.now().toString(),
-        postId: postId,
-        author: user.name,
-        content: newComment,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        likes: 0,
-        dislikes: 0,
-        isResolved: false,
+    const loadPostAndComments = async () => {
+      try {
+        setLoading(true);
         
-        userPoints: user.points,
-        isLiked: false,
-        isDisliked: false
+        // Load post
+        const postData = await getPost(parseInt(postId));
+        setPost(postData);
+        
+        // Load comments with nested structure
+        const commentsData = await getCommentsByPostId(parseInt(postId));
+        setComments(commentsData);
+        
+      } catch (error) {
+        console.error("Error loading post and comments:", error);
+        toast.error("Lỗi khi tải bài viết");
+        setPost(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (postId) {
+      loadPostAndComments();
+    }
+  }, [postId]);
+  // 2. useEffect: Tăng lượt xem
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    function getAuthHeaders() {
+      const token = localStorage.getItem("token");
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    }
+
+    useEffect(() => {
+      if (!postId) return;
+
+      axios.patch(`${API_URL}/posts/${postId}/view`, {}, {
+        headers: getAuthHeaders(),
+      }).catch((err) => {
+        console.error("Failed to increment view:", err);
+      });
+    }, [postId]);
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !currentUser || !post || submittingComment) return;
+
+    try {
+      setSubmittingComment(true);
+      const commentData: CreateCommentData = {
+        post_id: post.id,
+        content: newComment.trim()
       };
+      
+      const comment = await createComment(commentData);
       
       setComments(prev => [...prev, comment]);
       setNewComment("");
+      toast.success("Đã thêm bình luận");
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      toast.error("Lỗi khi thêm bình luận");
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
-  const handleToggleResolve = (commentId: string) => {
-    if (!user) return;
-    
-    setComments(prev => prev.map(comment => {
-      if (comment.id === commentId) {
-        if (comment.isResolved) {
-          return {
-            ...comment,
-            isResolved: false,
-            resolvedBy: undefined,
-            resolvedAt: undefined
-          };
-        } else {
-          // Add point to comment author
-          return {
-            ...comment,
-            isResolved: true,
-            resolvedBy: user.name,
-            resolvedAt: new Date().toISOString()
-          };
-        }
+  const handleToggleResolve = async (commentId: number) => {
+    try {
+      const updatedComment = await markCommentAsSolution(commentId);
+      
+      // Update comments state
+      const updateCommentInState = (comments: Comment[]): Comment[] => {
+        return comments.map(comment => {
+          if (comment.id === commentId) {
+            return { ...comment, is_solution: updatedComment.is_solution };
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            return { ...comment, replies: updateCommentInState(comment.replies) };
+          }
+          return comment;
+        });
+      };
+      
+      setComments(prev => updateCommentInState(prev));
+      
+      // Update post status if needed
+      if (updatedComment.is_solution) {
+        setPost(prev => prev ? { ...prev, status: 'solve' } : null);
+        toast.success("Đã đánh dấu giải pháp và cập nhật trạng thái bài viết");
+      } else {
+        setPost(prev => prev ? { ...prev, status: 'problem' } : null);
+        toast.success("Đã bỏ đánh dấu giải pháp");
       }
-      return comment;
-    }));
+    } catch (error) {
+      console.error("Error toggling resolve:", error);
+      toast.error("Lỗi khi cập nhật trạng thái");
+    }
   };
 
-  const handleLike = (commentId: string) => {
-    setComments(prev => prev.map(comment => {
-      if (comment.id === commentId) {
-        if (comment.isLiked) {
-          return {
-            ...comment,
-            isLiked: false,
-            likes: comment.likes - 1
-          };
-        } else {
-          return {
-            ...comment,
-            isLiked: true,
-            isDisliked: false,
-            likes: comment.likes + 1,
-            dislikes: comment.isDisliked ? comment.dislikes - 1 : comment.dislikes
-          };
-        }
-      }
-      return comment;
-    }));
+  const handleLike = async (commentId: number) => {
+    try {
+      const result = await toggleLikeComment(commentId);
+      
+      // Update comments state recursively
+      const updateCommentInState = (comments: Comment[]): Comment[] => {
+        return comments.map(comment => {
+          if (comment.id === commentId) {
+            return {
+              ...comment,
+              likes: result.likes,
+              isLiked: result.isLiked
+            };
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            return { ...comment, replies: updateCommentInState(comment.replies) };
+          }
+          return comment;
+        });
+      };
+      
+      setComments(prev => updateCommentInState(prev));
+    } catch (error) {
+      console.error("Error liking comment:", error);
+      toast.error("Lỗi khi thích bình luận");
+    }
   };
 
-  const handleDislike = (commentId: string) => {
-    setComments(prev => prev.map(comment => {
-      if (comment.id === commentId) {
-        if (comment.isDisliked) {
-          return {
-            ...comment,
-            isDisliked: false,
-            dislikes: comment.dislikes - 1
-          };
-        } else {
-          return {
-            ...comment,
-            isDisliked: true,
-            isLiked: false,
-            dislikes: comment.dislikes + 1,
-            likes: comment.isLiked ? comment.likes - 1 : comment.likes
-          };
-        }
-      }
-      return comment;
-    }));
+  const handleReply = async (parentId: number, content: string) => {
+    if (!currentUser || !post) return;
+
+    try {
+      const replyData: CreateCommentData = {
+        post_id: post.id,
+        content: content.trim(),
+        parent_id: parentId
+      };
+      
+      const reply = await createComment(replyData);
+      
+      // Add reply to the correct parent comment
+      const updateCommentInState = (comments: Comment[]): Comment[] => {
+        return comments.map(comment => {
+          if (comment.id === parentId) {
+            return { 
+              ...comment, 
+              replies: [...(comment.replies || []), reply] 
+            };
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            return { ...comment, replies: updateCommentInState(comment.replies) };
+          }
+          return comment;
+        });
+      };
+      
+      setComments(prev => updateCommentInState(prev));
+      toast.success("Đã thêm phản hồi");
+    } catch (error) {
+      console.error("Error adding reply:", error);
+      toast.error("Lỗi khi thêm phản hồi");
+    }
   };
 
-  const handleReply = (parentCommentId: string) => {
-    // This would typically open a reply form specific to the comment
-    console.log('Reply to comment:', parentCommentId);
+  const handleEditComment = async (commentId: number, content: string) => {
+    try {
+      const updateData: UpdateCommentData = { content };
+      const updatedComment = await updateComment(commentId, updateData);
+      
+      // Update comment in state recursively
+      const updateCommentInState = (comments: Comment[]): Comment[] => {
+        return comments.map(comment => {
+          if (comment.id === commentId) {
+            return { 
+              ...comment, 
+              content: updatedComment.content, 
+              updated_at: updatedComment.updated_at 
+            };
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            return { ...comment, replies: updateCommentInState(comment.replies) };
+          }
+          return comment;
+        });
+      };
+      
+      setComments(prev => updateCommentInState(prev));
+      toast.success("Đã cập nhật bình luận");
+    } catch (error) {
+      console.error("Error updating comment:", error);
+      toast.error("Lỗi khi cập nhật bình luận");
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    try {
+      await deleteComment(commentId);
+      
+      // Remove comment from state recursively
+      const removeCommentFromState = (comments: Comment[]): Comment[] => {
+        return comments.filter(comment => {
+          if (comment.id === commentId) {
+            return false;
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            comment.replies = removeCommentFromState(comment.replies);
+          }
+          return true;
+        });
+      };
+      
+      setComments(prev => removeCommentFromState(prev));
+      toast.success("Đã xóa bình luận");
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      toast.error("Lỗi khi xóa bình luận");
+    }
   };
 
   if (loading) {
@@ -501,9 +552,9 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Không tìm thấy bài viết</h1>
           <p className="text-gray-600">Bài viết bạn tìm kiếm không tồn tại.</p>
-          <Link href="/dashboard" className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-700">
+          <Link href="/posts" className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-700">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Quay lại Dashboard
+            Quay lại danh sách bài viết
           </Link>
         </div>
       </div>
@@ -512,27 +563,56 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "resolved": return "text-green-600 bg-green-100";
-      case "not_resolved": return "text-red-600 bg-red-100";
+      case "solve": return "text-green-600 bg-green-100";
+      case "problem": return "text-red-600 bg-red-100";
+      case "reject_by_admin_or_company_acc": return "text-gray-600 bg-gray-100";
       default: return "text-gray-600 bg-gray-100";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "resolved": return <CheckCircle className="h-4 w-4" />;
-      case "not_resolved": return <AlertCircle className="h-4 w-4" />;
+      case "solve": return <CheckCircle className="h-4 w-4" />;
+      case "problem": return <AlertCircle className="h-4 w-4" />;
       default: return <XCircle className="h-4 w-4" />;
     }
   };
 
-  // Organize comments by parent-child relationship
-  const topLevelComments = comments.filter(comment => !comment.parentId);
-  const getCommentReplies = (commentId: string) => 
-    comments.filter(comment => comment.parentId === commentId);
+  const getStatusDisplay = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'problem': 'Chưa giải quyết',
+      'solve': 'Đã giải quyết',
+      'reject_by_admin_or_company_acc': 'Bị từ chối'
+    };
+    return statusMap[status] || status;
+  };
 
-  const resolvedComments = comments.filter(comment => comment.isResolved);
-  const totalLikes = comments.reduce((sum, comment) => sum + comment.likes, 0);
+  // Calculate stats
+  const countCommentsRecursively = (comments: Comment[]): number => {
+    return comments.reduce((count, comment) => {
+      return count + 1 + (comment.replies ? countCommentsRecursively(comment.replies) : 0);
+    }, 0);
+  };
+
+  const countLikesRecursively = (comments: Comment[]): number => {
+    return comments.reduce((count, comment) => {
+      const commentLikes = comment.likes || 0;
+      const replyLikes = comment.replies ? countLikesRecursively(comment.replies) : 0;
+      return count + commentLikes + replyLikes;
+    }, 0);
+  };
+
+  const countSolutionsRecursively = (comments: Comment[]): number => {
+    return comments.reduce((count, comment) => {
+      const isSolution = comment.is_solution ? 1 : 0;
+      const replySolutions = comment.replies ? countSolutionsRecursively(comment.replies) : 0;
+      return count + isSolution + replySolutions;
+    }, 0);
+  };
+
+  const totalComments = countCommentsRecursively(comments);
+  const totalLikes = countLikesRecursively(comments);
+  const totalSolutions = countSolutionsRecursively(comments);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -541,19 +621,15 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link href={`/topics/${post.topicId}`} className="flex items-center text-gray-600 hover:text-gray-900">
+              <Link href="/posts" className="flex items-center text-gray-600 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5 mr-1" />
-                {post.topicName}
+                Danh sách bài viết
               </Link>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1 text-sm text-gray-600">
-                <Star className="h-4 w-4 text-yellow-500" />
-                <span>{user?.points} điểm</span>
-              </div>
               <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-medium">
-                  {user?.name?.charAt(0) || "U"}
+                  {currentUser?.full_name?.charAt(0) || "U"}
                 </span>
               </div>
             </div>
@@ -568,7 +644,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-4">
-                  {post.isPinned && (
+                  {post.is_pinned && (
                     <div className="flex items-center space-x-1 text-blue-600">
                       <Pin className="h-4 w-4" />
                       <span className="text-sm font-medium">Bài ghim</span>
@@ -576,7 +652,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
                   )}
                   <span className={`px-3 py-1 text-sm rounded-full flex items-center space-x-1 ${getStatusColor(post.status)}`}>
                     {getStatusIcon(post.status)}
-                    <span>{post.status === "resolved" ? "Đã giải quyết" : "Chưa giải quyết"}</span>
+                    <span>{getStatusDisplay(post.status)}</span>
                   </span>
                 </div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
@@ -584,28 +660,45 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
             </div>
 
             <div className="prose max-w-none mb-6">
-              <p className="text-gray-700 whitespace-pre-wrap text-lg leading-relaxed">
-                {post.description}
-              </p>
+              <div 
+                className="text-gray-700 text-lg leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: post.description }}
+              />
             </div>
+
+            {/* Display images if any */}
+            {post.images && post.images.length > 0 && (
+              <div className="mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {post.images.map((image, index) => (
+                    <img
+                      key={index}
+                      src={image}
+                      alt={`Post image ${index + 1}`}
+                      className="w-full h-48 object-cover rounded-lg border"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-6 border-t border-gray-200">
               <div className="flex items-center space-x-6">
                 <div className="flex items-center space-x-2">
                   <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-medium">
-                      {post.author.charAt(0).toUpperCase()}
+                      {post.user?.full_name?.charAt(0).toUpperCase() || 'U'}
                     </span>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{post.author}</p>
-                    <p className="text-sm text-gray-500">{post.userPoints} điểm</p>
+                    <p className="font-medium text-gray-900">{post.user?.full_name}</p>
+                    <p className="text-sm text-gray-500">{post.user?.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
                   <div className="flex items-center space-x-1">
                     <Calendar className="h-4 w-4" />
-                    <span>{new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <span>{new Date(post.created_at).toLocaleDateString('vi-VN')}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <Eye className="h-4 w-4" />
@@ -617,7 +710,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
               <div className="flex items-center space-x-4 text-sm text-gray-500">
                 <div className="flex items-center space-x-1">
                   <MessageCircle className="h-4 w-4" />
-                  <span>{comments.length} bình luận</span>
+                  <span>{totalComments} bình luận</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <ThumbsUp className="h-4 w-4" />
@@ -632,12 +725,12 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-semibold text-gray-900">
-              Bình luận ({comments.length})
+              Bình luận ({totalComments})
             </h3>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
               <div className="flex items-center space-x-1">
                 <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>{resolvedComments.length} đã giải quyết</span>
+                <span>{totalSolutions} đã giải quyết</span>
               </div>
               <div className="flex items-center space-x-1">
                 <Heart className="h-4 w-4 text-red-500" />
@@ -653,7 +746,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
           <div className="flex space-x-4">
             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-white text-sm font-medium">
-                {user?.name?.charAt(0) || "U"}
+                {currentUser?.full_name?.charAt(0) || "U"}
               </span>
             </div>
             <div className="flex-1">
@@ -663,14 +756,19 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
                 placeholder="Viết bình luận của bạn..."
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 rows={4}
+                maxLength={5000}
               />
-              <div className="flex justify-end mt-3">
+              <div className="flex justify-between items-center mt-3">
+                <span className="text-xs text-gray-500">
+                  {newComment.length}/5000 ký tự
+                </span>
                 <button
                   onClick={handleAddComment}
-                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={!newComment.trim() || submittingComment}
+                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="h-4 w-4" />
-                  <span>Đăng bình luận</span>
+                  <span>{submittingComment ? 'Đang gửi...' : 'Đăng bình luận'}</span>
                 </button>
               </div>
             </div>
@@ -681,17 +779,18 @@ const PostDetail: React.FC<PostDetailProps> = ({ postId }) => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="p-6">
             <div className="space-y-6">
-              {topLevelComments.map((comment) => (
+              {comments.map((comment) => (
                 <CommentCard
                   key={comment.id}
                   comment={comment}
-                  postAuthor={post.author}
-                  currentUser={user!}
+                  postAuthor={post.user?.full_name || ''}
+                  postAuthorId={post.user?.id || 0}
+                  currentUser={currentUser}
                   onToggleResolve={handleToggleResolve}
                   onLike={handleLike}
-                  onDislike={handleDislike}
                   onReply={handleReply}
-                  replies={getCommentReplies(comment.id)}
+                  onEdit={handleEditComment}
+                  onDelete={handleDeleteComment}
                   level={0}
                 />
               ))}

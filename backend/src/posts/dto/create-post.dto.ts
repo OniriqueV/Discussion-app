@@ -10,6 +10,11 @@ export class CreatePostDto {
   description: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @IsOptional()
   @IsInt()
   topic_id?: number;
 

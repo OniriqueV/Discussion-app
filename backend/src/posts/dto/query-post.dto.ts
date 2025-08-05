@@ -34,4 +34,9 @@ export class QueryPostDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  include_deleted?: boolean;
 }

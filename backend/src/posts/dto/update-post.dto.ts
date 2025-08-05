@@ -10,6 +10,11 @@ export class UpdatePostDto {
   description?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @IsOptional()
   @IsInt()
   topic_id?: number;
 

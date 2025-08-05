@@ -11,8 +11,12 @@ import {
   Request,
   ParseIntPipe,
   HttpCode,
-  HttpStatus
+  HttpStatus,
+  UseInterceptors,
+  UploadedFiles,
+  BadRequestException
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -20,6 +24,7 @@ import { QueryPostDto } from './dto/query-post.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { multerPostImagesConfig } from '../common/config/multer-config';
 @Controller('posts')
 @UseGuards(JwtAuthGuard)
 export class PostsController {
@@ -96,4 +101,47 @@ export class PostsController {
   togglePin(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.togglePin(id);
   }
+
+  @Post(':id/upload-images')
+  @UseInterceptors(FilesInterceptor('images', 10, multerPostImagesConfig))
+  async uploadImages(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+
+    return this.postsService.uploadImages(id, files, req.user.id);
+  }
+
+  @Delete(':id/images/:imageIndex')
+  async deleteImage(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('imageIndex', ParseIntPipe) imageIndex: number,
+    @Request() req
+  ) {
+    return this.postsService.deleteImage(id, imageIndex, req.user.id);
+  }
+
+  @Post('upload-temp-images')
+  @UseInterceptors(FilesInterceptor('images', 10, multerPostImagesConfig))
+  async uploadTempImages(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+
+    return this.postsService.uploadTempImages(files, req.user.id);
+  }
+
+  @Patch(':id/view')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async incrementView(@Param('id', ParseIntPipe) id: number) {
+      await this.postsService.incrementViewCount(id);
+    }
+
 }

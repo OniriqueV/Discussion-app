@@ -1,3 +1,4 @@
+// topic.controller.ts - Admin routes
 import {
   Body,
   Controller,
@@ -20,11 +21,11 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 
-@ApiTags('Topics')
+@ApiTags('Topics Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
-@Controller('topics')
+@Controller('admin/topics') // Changed to admin/topics to avoid conflicts
 export class TopicController {
   constructor(private topicService: TopicService) {}
 
@@ -42,7 +43,7 @@ export class TopicController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all topics' })
+  @ApiOperation({ summary: 'Get all topics (admin)' })
   @ApiResponse({ status: 200, description: 'Topics retrieved successfully' })
   async findAll() {
     return {
@@ -64,7 +65,7 @@ export class TopicController {
   }
 
   @Get(':slug')
-  @ApiOperation({ summary: 'Get topic by slug' })
+  @ApiOperation({ summary: 'Get topic by slug (admin)' })
   @ApiResponse({ status: 200, description: 'Topic retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Topic not found' })
   async findBySlug(@Param('slug') slug: string) {

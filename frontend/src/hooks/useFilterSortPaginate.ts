@@ -4,10 +4,10 @@ export type SortOrder = "asc" | "desc";
 
 export type FilterOptions<T> = {
   searchTerm?: string;
-  searchFields?: (keyof T)[];
+  searchFields?: string[]; // Support nested fields like 'user.full_name'
   statusFilter?: string;
   statusField?: keyof T;
-  initialSortField?: keyof T | null; // Đổi tên để tránh hiểu nhầm
+  initialSortField?: string | null;
   initialSortOrder?: SortOrder;
 };
 
@@ -16,11 +16,16 @@ export interface PaginationResult<T> {
   totalPages: number;
   currentPage: number;
   setPage: (p: number) => void;
-  sortField: keyof T | null;
-  setSortField: (f: keyof T | null) => void;
+  sortField: string | null;
+  setSortField: (f: string | null) => void;
   sortOrder: SortOrder;
   setSortOrder: (o: SortOrder) => void;
   filteredData: T[];
+}
+
+// Helper function to get nested field value
+function getNestedValue(obj: any, path: string): any {
+  return path.split(".").reduce((acc, key) => acc?.[key], obj);
 }
 
 export function useFilterSortPaginate<T>(
@@ -36,7 +41,7 @@ export function useFilterSortPaginate<T>(
   }: FilterOptions<T> = {}
 ): PaginationResult<T> {
   const [page, setPage] = useState(0);
-  const [sortField, setSortField] = useState<keyof T | null>(initialSortField);
+  const [sortField, setSortField] = useState<string | null>(initialSortField);
   const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
 
   const filteredData = useMemo(() => {
@@ -47,7 +52,7 @@ export function useFilterSortPaginate<T>(
       const lower = searchTerm.toLowerCase();
       result = result.filter(item =>
         searchFields.some(field =>
-          String(item[field]).toLowerCase().includes(lower)
+          String(getNestedValue(item, field)).toLowerCase().includes(lower)
         )
       );
     }
@@ -60,8 +65,8 @@ export function useFilterSortPaginate<T>(
     // Sorting
     if (sortField) {
       result.sort((a, b) => {
-        const aVal = a[sortField];
-        const bVal = b[sortField];
+        const aVal = getNestedValue(a, sortField);
+        const bVal = getNestedValue(b, sortField);
 
         if (typeof aVal === "number" && typeof bVal === "number") {
           return sortOrder === "asc" ? aVal - bVal : bVal - aVal;

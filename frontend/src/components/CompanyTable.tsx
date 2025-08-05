@@ -37,14 +37,18 @@ export default function CompanyTable({
   onBulkDelete,
 }: CompanyTableProps) {
   const router = useRouter();
- const currentUser = useCurrentUser();
+   const { user: currentUser, isLoading: userLoading } = useCurrentUser();
 
 // Giả sử CurrentUser định nghĩa như sau:
 type CurrentUser = {
   sub: number | string;
+  id: number;
   email: string;
   role: 'admin' | 'ca_user' | 'member';
+  company_id?: number;
+  full_name: string;
 };
+
 
 const user = currentUser as CurrentUser;
 
@@ -59,16 +63,13 @@ const isCaUser = user?.role === 'ca_user';
 const visibleCompanies = useMemo(() => {
   if (isAdmin) return companies;
 
-  if (isCaUser && userId) {
-    return companies.filter((company) =>
-      company.users?.some(
-        (u) => u.id === userId && u.role === 'ca_user'
-      )
-    );
+  if (isCaUser && user?.company_id) {
+    return companies.filter((company) => company.id === user.company_id);
   }
 
   return [];
-}, [companies, isAdmin, isCaUser, userId]);
+}, [companies, isAdmin, isCaUser, user]);
+
 
 
   const [data, setData] = useState(visibleCompanies);

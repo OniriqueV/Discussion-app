@@ -1,3 +1,4 @@
+// tag.controller.ts - Admin routes
 import {
   Body,
   Controller,
@@ -21,11 +22,11 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
-@ApiTags('Tags')
+@ApiTags('Tags Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
-@Controller('tags')
+@Controller('admin/tags') // Changed to admin/tags to avoid conflicts
 export class TagController {
   constructor(private tagService: TagService) {}
 
@@ -133,3 +134,4 @@ export class TagController {
     };
   }
 }
+

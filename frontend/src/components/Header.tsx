@@ -1,6 +1,7 @@
 // components/Header.tsx
 "use client";
 import { useRouter } from "next/navigation";
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
 
 interface HeaderProps {
   showLogout?: boolean;
@@ -24,6 +25,7 @@ export default function Header({
   showPosts = true,
 }: HeaderProps) {
   const router = useRouter();
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
   
   const handleNavigate = (path: string) => router.push(path);
   
@@ -198,11 +200,11 @@ export default function Header({
             </button>
           )}
 
-          {showPosts && (
+          {showPosts && !userLoading && (
             <button
-              onClick={() => handleNavigate("/posts")}
+              onClick={() => handleNavigate(currentUser?.role === 'admin' || currentUser?.role === 'ca_user' ? "/posts" : "/posts")}
               className="p-2 sm:p-3 rounded-full hover:bg-gray-100 transition-colors duration-200 group"
-              title="Posts"
+              title={currentUser?.role === 'admin' || currentUser?.role === 'ca_user' ? "Quản lý bài viết" : "Danh sách bài viết"}
             >
               <svg
                 className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-gray-800 transition-colors"

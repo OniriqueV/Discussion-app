@@ -31,7 +31,7 @@ export default function UserForm({ userId }: Props) {
   const [initialData, setInitialData] = useState<User | null>(null);
   const [fetchingUser, setFetchingUser] = useState(!!userId);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const currentUser = useCurrentUser();
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
 
   const {
     register,

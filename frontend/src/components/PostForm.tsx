@@ -2,28 +2,32 @@
 
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { topicsMock } from "@/mock/topics";
-import { tagsMock } from "@/mock/tags";
-import { PostStatus } from "@/mock/posts";
+import WYSIWYGEditor from "./WYSIWYGEditor";
+import { createPost, updatePost, uploadPostImages, uploadTempImages, getPost, Post } from "@/api/postApi";
+import {Tag, tagApi} from "@/api/tag";
+import { Topic, topicApi } from "@/api/topic";
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
 
 interface FormValues {
   title: string;
   description: string;
-  topicId: string;
-  status: PostStatus;
-  tagIds: string[];
+  topic_id: string;
+  tag_ids: string[];
 }
 
 interface PostFormProps {
-  initialData?: FormValues;
+  postId?: number;
 }
 
-export default function PostForm({ initialData }: PostFormProps) {
+export default function PostForm({ postId }: PostFormProps) {
   const router = useRouter();
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
+  const [loading, setLoading] = useState(false);
+  const [initialPost, setInitialPost] = useState<Post | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
 
   const {
     register,
@@ -31,68 +35,274 @@ export default function PostForm({ initialData }: PostFormProps) {
     setValue,
     getValues,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    defaultValues: initialData ?? {
+    defaultValues: {
       title: "",
       description: "",
-      topicId: "",
-      status: "not_resolved",
-      tagIds: [],
+      topic_id: "",
+      tag_ids: [],
     },
     mode: "onChange",
   });
 
-  const watchedTagIds = watch("tagIds") || [];
+  const watchedTagIds = watch("tag_ids") || [];
+  type PostWithTags = Post & {
+  tags: { id: number }[];
+};
+  // Load tags for the form
+  useEffect(() => {
+  const fetchTags = async () => {
+    try {
+      const res = await tagApi.findAllPublic();
+      setTags(res.data);
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách tag:", error);
+      toast.error("Không thể tải danh sách tag");
+    }
+  };
 
-  // Tiptap editor configuration
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: initialData?.description || "",
-    onUpdate({ editor }) {
-      setValue("description", editor.getHTML(), { shouldValidate: true });
-    },
-  });
+  fetchTags();
+}, []);
+  // Load topics for the form
+    useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const res = await topicApi.findAllPublic();
+        setTopics(res.data);
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách topic:", error);
+        toast.error("Không thể tải danh sách topic");
+      }
+    };
+
+    fetchTopics();
+  }, []);
+  // Check authentication
+  useEffect(() => {
+    if (!userLoading && !currentUser) {
+      toast.error("Vui lòng đăng nhập để tạo bài viết");
+      router.push("/login");
+      return;
+    }
+  }, [currentUser, userLoading, router]);
+
+  // Load existing post data for editing
+  useEffect(() => {
+    const loadPost = async () => {
+      if (postId) {
+        try {
+          setLoading(true);
+          const post = await getPost(postId) as PostWithTags;
+          setInitialPost(post);
+          
+          // Check if user can edit this post
+          if (post.user_id !== currentUser?.id && currentUser?.role !== 'admin' && currentUser?.role !== 'ca_user') {
+            toast.error("Bạn không có quyền chỉnh sửa bài viết này");
+            router.push("/posts");
+            return;
+          }
+          
+          // Populate form with existing data
+          reset({
+            title: post.title,
+            description: post.description,
+            topic_id: post.topic_id?.toString() || "",
+            tag_ids: post.tags?.map(tag => tag.id.toString()) || [],
+          });
+        } catch (error) {
+          console.error("Error loading post:", error);
+          toast.error("Lỗi khi tải thông tin bài viết");
+          router.push("/posts");
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    if (currentUser && postId) {
+      loadPost();
+    }
+  }, [postId, reset, router, currentUser]);
+
+  // Handle description change from WYSIWYG editor
+  const handleDescriptionChange = (content: string) => {
+    setValue("description", content, { shouldValidate: true });
+  };
 
   // Handle tag selection
   const handleCheckboxChange = (tagId: string) => {
     const updatedTags = watchedTagIds.includes(tagId)
       ? watchedTagIds.filter((id) => id !== tagId)
       : [...watchedTagIds, tagId];
-    setValue("tagIds", updatedTags, { shouldValidate: true });
+    setValue("tag_ids", updatedTags, { shouldValidate: true });
+  };
+
+  const handleImageUpload = async (file: File): Promise<string> => {
+    try {
+      // If we're editing a post, upload to that post
+      if (postId) {
+        const result = await uploadPostImages(postId, [file]);
+        // Return the URL of the uploaded image
+        return result.images[result.images.length - 1];
+      } else {
+        // For new posts, upload to Next.js API route
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/uploads/temp', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        return data.url;
+      }
+    } catch (error: any) {
+      console.error("Error uploading image:", error);
+      
+      // Fallback to blob URL if upload fails
+      console.warn("Upload failed, using blob URL as fallback");
+      return URL.createObjectURL(file);
+    }
+  };
+
+
+  // Function to fix image URLs in content
+  const fixImageUrls = (content: string): string => {
+    // Replace relative paths with absolute paths
+    return content.replace(/src="\.\.\/uploads\/temp\//g, 'src="/uploads/temp/');
   };
 
   // Form submission handler
   const onSubmit = async (data: FormValues) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Check authentication
+      if (!currentUser) {
+        toast.error("Vui lòng đăng nhập để tạo bài viết");
+        router.push("/login");
+        return;
+      }
+
+      // Fix image URLs in description
+      const fixedDescription = fixImageUrls(data.description);
       
-      const message = initialData 
-        ? "Cập nhật bài viết thành công!" 
-        : "Tạo bài viết mới thành công!";
+      const postData = {
+        title: data.title,
+        description: fixedDescription,
+        topic_id: data.topic_id ? parseInt(data.topic_id) : undefined,
+        tag_ids: data.tag_ids.map(id => parseInt(id)),
+      };
+
+      if (postId) {
+        // Check if user can edit this post
+        if (initialPost && initialPost.user_id !== currentUser.id && currentUser.role !== 'admin' && currentUser.role !== 'ca_user') {
+          toast.error("Bạn không có quyền chỉnh sửa bài viết này");
+          return;
+        }
+        
+        // Update existing post
+        await updatePost(postId, postData);
+        toast.success("Cập nhật bài viết thành công!");
+      } else {
+        // Create new post
+        const newPost = await createPost(postData);
+        toast.success("Tạo bài viết mới thành công!");
+        
+        // Redirect to the new post detail page
+        router.push(`/posts/detail/${newPost.id}`);
+        return;
+      }
       
-      toast.success(message);
-      console.log("Saving post:", data);
       router.push("/posts");
-    } catch (error) {
-      toast.error("Có lỗi xảy ra, vui lòng thử lại!");
+    } catch (error: any) {
+      console.error("Error saving post:", error);
+      
+      // Handle specific error messages from the API
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error("Có lỗi xảy ra, vui lòng thử lại!");
+      }
     }
   };
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2">Đang kiểm tra quyền truy cập...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center py-12">
+            <div className="text-center">
+              <p className="text-gray-600 mb-4">Vui lòng đăng nhập để tạo bài viết</p>
+              <button
+                onClick={() => router.push("/login")}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Đăng nhập
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2">Đang tải...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {initialData ? "Chỉnh sửa bài viết" : "Tạo bài viết mới"}
-          </h1>
-          <p className="mt-2 text-gray-600">
-            {initialData 
-              ? "Cập nhật thông tin bài viết của bạn" 
-              : "Điền thông tin để tạo bài viết mới"}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {postId ? "Chỉnh sửa bài viết" : "Tạo bài viết mới"}
+              </h1>
+              <p className="mt-2 text-gray-600">
+                {postId 
+                  ? "Cập nhật thông tin bài viết của bạn" 
+                  : "Điền thông tin để tạo bài viết mới"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Tác giả:</p>
+              <p className="font-medium text-gray-900">{currentUser.full_name}</p>
+              <p className="text-xs text-gray-500">{currentUser.email}</p>
+            </div>
+          </div>
         </div>
 
         {/* Form Container */}
@@ -106,7 +316,8 @@ export default function PostForm({ initialData }: PostFormProps) {
               <input
                 {...register("title", { 
                   required: "Tiêu đề là bắt buộc",
-                  minLength: { value: 5, message: "Tiêu đề phải có ít nhất 5 ký tự" }
+                  minLength: { value: 5, message: "Tiêu đề phải có ít nhất 5 ký tự" },
+                  maxLength: { value: 255, message: "Tiêu đề không được quá 255 ký tự" }
                 })}
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
                   errors.title ? 'border-red-500' : 'border-gray-300'
@@ -125,12 +336,13 @@ export default function PostForm({ initialData }: PostFormProps) {
               <label className="block text-sm font-semibold text-gray-700">
                 Mô tả <span className="text-red-500">*</span>
               </label>
-              <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-                <EditorContent 
-                  editor={editor} 
-                  className="prose max-w-none p-4 min-h-[200px] focus:outline-none"
-                />
-              </div>
+              <WYSIWYGEditor
+                value={watch("description") || ""}
+                onChange={handleDescriptionChange}
+                placeholder="Nhập mô tả bài viết..."
+                height={300}
+                onImageUpload={handleImageUpload}
+              />
               {errors.description && (
                 <p className="text-red-500 text-sm font-medium">
                   {errors.description.message}
@@ -138,48 +350,22 @@ export default function PostForm({ initialData }: PostFormProps) {
               )}
             </div>
 
-            {/* Topic and Status Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Topic Field */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Chủ đề <span className="text-red-500">*</span>
-                </label>
-                <select 
-                  {...register("topicId", { required: "Vui lòng chọn chủ đề" })}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                    errors.topicId ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">-- Chọn chủ đề --</option>
-                  {topicsMock.map((topic) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.topicId && (
-                  <p className="text-red-500 text-sm font-medium">
-                    {errors.topicId.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Status Field */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Trạng thái <span className="text-red-500">*</span>
-                </label>
-                <select 
-                  {...register("status", { required: "Vui lòng chọn trạng thái" })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                >
-                  <option value="not_resolved">Chưa giải quyết</option>
-                  <option value="resolved">Đã giải quyết</option>
-                  <option value="deleted_by_admin">Xóa bởi Admin</option>
-                  <option value="deleted_by_company">Xóa bởi Công ty</option>
-                </select>
-              </div>
+            {/* Topic Field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Chủ đề
+              </label>
+              <select 
+                {...register("topic_id")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <option value="">-- Chọn chủ đề (tùy chọn) --</option>
+                {topics.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Tags Field */}
@@ -188,15 +374,16 @@ export default function PostForm({ initialData }: PostFormProps) {
                 Tags
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {tagsMock.map((tag) => (
+                {tags.map((tag) => (
                   <label 
                     key={tag.id} 
                     className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
-                      checked={watchedTagIds.includes(tag.id)}
-                      onChange={() => handleCheckboxChange(tag.id)}
+                      checked={watchedTagIds.includes(tag.id.toString())}
+                      onChange={() => handleCheckboxChange(tag.id.toString())}
+
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
                     <span className="text-sm font-medium text-gray-700">
@@ -204,8 +391,29 @@ export default function PostForm({ initialData }: PostFormProps) {
                     </span>
                   </label>
                 ))}
+
               </div>
             </div>
+
+            {/* Show current images if editing */}
+            {initialPost?.images && initialPost.images.length > 0 && (
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Hình ảnh hiện tại
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {initialPost.images.map((image, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={image}
+                        alt={`Image ${index + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-gray-200">
@@ -230,7 +438,7 @@ export default function PostForm({ initialData }: PostFormProps) {
                     Đang lưu...
                   </>
                 ) : (
-                  initialData ? "Cập nhật bài viết" : "Lưu bài viết"
+                  postId ? "Cập nhật bài viết" : "Lưu bài viết"
                 )}
               </button>
             </div>

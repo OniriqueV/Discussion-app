@@ -12,12 +12,13 @@ export class PostsService {
   constructor(private prisma: PrismaService) {}
 
   async create(createPostDto: CreatePostDto, userId: number, companyId?: number) {
-    const { tag_ids, ...postData } = createPostDto;
+    const { tag_ids, images, ...postData } = createPostDto;
 
     // Create post
     const post = await this.prisma.post.create({
       data: {
         ...postData,
+        images: images || [], // Uncomment after running migration
         user_id: userId,
         company_id: companyId,
         status: 'problem'
@@ -49,86 +50,93 @@ export class PostsService {
   }
 
   async findAll(queryDto: QueryPostDto, userRole?: string, companyId?: number) {
-    const { page=1, limit=10, status, topic_id, company_id, is_pinned, search } = queryDto;
-    const skip = (page - 1) * limit;
+      const {
+        page = 1,
+        limit = 10,
+        status,
+        topic_id,
+        company_id,
+        is_pinned,
+        search,
+        include_deleted,
+      } = queryDto;
 
-    const where: any = {
-      deleted_at: null
-    };
+      const skip = (page - 1) * limit;
 
-    // Role-based filtering
-    if (userRole !== 'admin') {
-      where.OR = [
-        { status: { in: ['problem', 'solve'] } },
-        { company_id: companyId }
-      ];
-    }
+      const where: any = {
+        deleted_at: include_deleted ? { not: null } : null,
+      };
 
-    if (status) where.status = status;
-    if (topic_id) where.topic_id = topic_id;
-    if (company_id) where.company_id = company_id;
-    if (is_pinned !== undefined) where.is_pinned = is_pinned;
+      const filters: any[] = [];
 
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+      if (status) filters.push({ status });
+      if (topic_id) filters.push({ topic_id });
+      if (company_id) filters.push({ company_id });
+      if (is_pinned !== undefined) filters.push({ is_pinned });
 
-    const [posts, total] = await Promise.all([
-      this.prisma.post.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [
-          { is_pinned: 'desc' },
-          { created_at: 'desc' }
-        ],
-        include: {
-          user: {
-            select: { id: true, full_name: true, email: true, avatar: true }
-          },
-          topic: {
-            select: { id: true, name: true, slug: true }
-          },
-          company: {
-            select: { id: true, name: true }
-          },
-          post_tags: {
-            include: {
-              tag: {
-                select: { id: true, name: true, slug: true }
-              }
-            }
-          },
-          _count: {
-            select: {
-              comments: { where: { deleted_at: null } },
-              user_points: true
-            }
-          }
-        }
-      }),
-      this.prisma.post.count({ where })
-    ]);
-
-    return {
-      data: posts.map(post => ({
-        ...post,
-        tags: post.post_tags.map(pt => pt.tag),
-        post_tags: undefined,
-        comments_count: post._count.comments,
-        points: post._count.user_points
-      })),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+      if (userRole !== 'admin') {
+        filters.push({
+          OR: [
+            { status: { in: ['problem', 'solve'] } },
+            { company_id: companyId },
+          ],
+        });
       }
-    };
-  }
+
+      if (search) {
+        filters.push({
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+          ],
+        });
+      }
+
+      where.AND = filters;
+
+      const [posts, total] = await Promise.all([
+        this.prisma.post.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ is_pinned: 'desc' }, { created_at: 'desc' }],
+          include: {
+            user: { select: { id: true, full_name: true, email: true, avatar: true } },
+            topic: { select: { id: true, name: true, slug: true } },
+            company: { select: { id: true, name: true } },
+            post_tags: {
+              include: {
+                tag: { select: { id: true, name: true, slug: true } },
+              },
+            },
+            _count: {
+              select: {
+                comments: { where: { deleted_at: null } },
+                user_points: true,
+              },
+            },
+          },
+        }),
+        this.prisma.post.count({ where }),
+      ]);
+
+      return {
+        data: posts.map((post) => ({
+          ...post,
+          tags: post.post_tags.map((pt) => pt.tag),
+          post_tags: undefined,
+          comments_count: post._count.comments,
+          points: post._count.user_points,
+        })),
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    }
+
 
   async findOne(id: number) {
     const post = await this.prisma.post.findUnique({
@@ -216,13 +224,14 @@ export class PostsService {
       throw new ForbiddenException('You can only edit your own posts');
     }
 
-    const { tag_ids, ...postData } = updatePostDto;
+    const { tag_ids, images, ...postData } = updatePostDto;
 
     // Update post
     const updatedPost = await this.prisma.post.update({
       where: { id },
       data: {
         ...postData,
+        images: images, // Uncomment after running migration
         updated_at: new Date()
       }
     });
@@ -421,4 +430,106 @@ The Team`
       }
     };
   }
+
+  async uploadImages(id: number, files: Express.Multer.File[], userId: number) {
+    const post = await this.prisma.post.findUnique({
+      where: { id, deleted_at: null },
+      include: { user: true }
+    });
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    // Check permissions - only author can upload images
+    if (post.user_id !== userId) {
+      throw new ForbiddenException('You can only upload images to your own posts');
+    }
+
+    // Generate image URLs
+    const imageUrls = files.map(file => `/uploads/post-images/${file.filename}`);
+
+    // Get current images and add new ones
+    const currentImages = post.images || []; // Uncomment after running migration
+    const updatedImages = [...currentImages, ...imageUrls]; // Uncomment after running migration
+    // const updatedImages = [...imageUrls]; // Temporary fix
+
+    // Update post with new images
+    const updatedPost = await this.prisma.post.update({
+      where: { id },
+      data: {
+        images: updatedImages, // Uncomment after running migration
+        updated_at: new Date()
+      }
+    });
+
+    return {
+      message: 'Images uploaded successfully',
+      images: imageUrls,
+      totalImages: updatedImages.length
+    };
+  }
+
+  async deleteImage(id: number, imageIndex: number, userId: number) {
+    const post = await this.prisma.post.findUnique({
+      where: { id, deleted_at: null },
+      include: { user: true }
+    });
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    // Check permissions - only author can delete images
+    if (post.user_id !== userId) {
+      throw new ForbiddenException('You can only delete images from your own posts');
+    }
+
+    const currentImages = post.images || []; // Uncomment after running migration
+    
+    if (imageIndex < 0 || imageIndex >= currentImages.length) {
+      throw new BadRequestException('Invalid image index');
+    }
+
+    // Remove image at specified index
+    const updatedImages = currentImages.filter((_, index) => index !== imageIndex); // Uncomment after running migration
+    // const updatedImages: string[] = []; // Temporary fix
+
+    // Update post
+    const updatedPost = await this.prisma.post.update({
+      where: { id },
+      data: {
+        images: updatedImages, // Uncomment after running migration
+        updated_at: new Date()
+      }
+    });
+
+    return {
+      message: 'Image deleted successfully',
+      totalImages: updatedImages.length
+    };
+  }
+
+  async uploadTempImages(files: Express.Multer.File[], userId: number) {
+    // Generate image URLs for temporary uploads
+    const imageUrls = files.map(file => `/uploads/post-images/${file.filename}`);
+
+    return {
+      message: 'Temporary images uploaded successfully',
+      images: imageUrls,
+      totalImages: imageUrls.length
+    };
+  }
+
+  async incrementViewCount(id: number): Promise<void> {
+  await this.prisma.post.update({
+    where: { id },
+    data: {
+      views: {
+        increment: 1,
+      },
+    },
+  });
+}
+
 }

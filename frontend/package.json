@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tinymce/tinymce-react": "^6.2.1",
     "@tiptap/react": "^2.25.0",
     "@tiptap/starter-kit": "^2.25.0",
     "axios": "^1.10.0",

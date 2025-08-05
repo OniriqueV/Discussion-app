@@ -39,7 +39,7 @@ export default function UserTable({
 
   
 
-  const currentUser = useCurrentUser();
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
   const user = currentUser as any;
   const isCaUser = currentUser?.role === 'ca_user';
   

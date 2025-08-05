@@ -1,8 +1,11 @@
-// components/AvatarUploader.tsx
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
-export default function AvatarUploader() {
+interface AvatarUploaderProps {
+  avatarUrl?: string; // URL từ database hoặc Google
+}
+
+export default function AvatarUploader({ avatarUrl }: AvatarUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -14,12 +17,21 @@ export default function AvatarUploader() {
     }
   };
 
+  // Dọn URL tạm khi component unmount
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const displaySrc = preview || avatarUrl || "/avatar-default.jpg";
+
   return (
     <div className="flex flex-col items-center">
       <img
-        src={preview || "/avatar-default.jpg"}
+        src={displaySrc}
         alt="Avatar"
-        className="w-24 h-24 rounded-full object-cover object-contain border mb-2 bg-gray-100"
+        className="w-24 h-24 rounded-full object-cover object-center border mb-2 bg-gray-100"
       />
       <input
         ref={inputRef}

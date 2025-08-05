@@ -1,4 +1,3 @@
-// app/posts/detail/[id]/page.tsx
 import PostDetail from "@/components/PostDetail";
 
 interface Props {

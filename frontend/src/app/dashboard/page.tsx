@@ -3,103 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Search, Eye, MessageCircle, Calendar, TrendingUp, Users, FileText, Tag, ChevronRight, ChevronLeft, MoreHorizontal, Activity, Clock, CheckCircle, XCircle, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import Header from '@/components/Header';
-
-// Mock data
-const topicsMock = [
-  { id: "1", name: "React", postCount: 12, createdAt: "2024-12-01T00:00:00Z" },
-  { id: "2", name: "Next.js", postCount: 8, createdAt: "2025-02-15T00:00:00Z" },
-  { id: "3", name: "TypeScript", postCount: 20, createdAt: "2025-01-10T00:00:00Z" },
-  { id: "4", name: "Node.js", postCount: 14, createdAt: "2025-03-05T00:00:00Z" },
-  { id: "5", name: "Express", postCount: 5, createdAt: "2024-11-20T00:00:00Z" },
-  { id: "6", name: "MongoDB", postCount: 10, createdAt: "2025-01-25T00:00:00Z" },
-  { id: "7", name: "GraphQL", postCount: 7, createdAt: "2025-04-10T00:00:00Z" },
-  { id: "8", name: "Redux", postCount: 9, createdAt: "2024-10-05T00:00:00Z" },
-  { id: "9", name: "Jest", postCount: 4, createdAt: "2024-09-01T00:00:00Z" },
-  { id: "10", name: "Tailwind CSS", postCount: 13, createdAt: "2025-05-20T00:00:00Z" },
-];
-
-const postsMock = [
-  {
-    id: "1",
-    title: "Fix hydration mismatch in Next.js",
-    description: "I'm getting hydration errors on my topic page...",
-    author: "admin1",
-    topicId: "1",
-    status: "not_resolved",
-    tagIds: ["1", "2"],
-    createdAt: "2025-06-01T10:00:00Z",
-  },
-  {
-    id: "2",
-    title: "Authentication in React",
-    description: "How to use Firebase with custom hooks...",
-    author: "user2",
-    topicId: "2",
-    status: "resolved",
-    tagIds: ["3"],
-    createdAt: "2025-06-03T15:00:00Z",
-  },
-  {
-    id: "3",
-    title: "Improve API performance",
-    description: "Caching strategies for better API performance.",
-    author: "admin2",
-    topicId: "2",
-    status: "resolved",
-    tagIds: ["5", "13"],
-    createdAt: "2025-06-05T12:00:00Z",
-  },
-  {
-    id: "4",
-    title: "Unit testing in Node.js",
-    description: "How to use Jest and other testing tools in Node.js.",
-    author: "user1",
-    topicId: "3",
-    status: "not_resolved",
-    tagIds: ["2", "7"],
-    createdAt: "2025-06-06T08:30:00Z",
-  },
-  {
-    id: "5",
-    title: "CI/CD with GitHub Actions",
-    description: "Setting up workflows with GitHub Actions.",
-    author: "dev5",
-    topicId: "4",
-    status: "resolved",
-    tagIds: ["10", "11"],
-    createdAt: "2025-06-07T14:15:00Z",
-  },
-  {
-    id: "7",
-    title: "API security best practices",
-    description: "How to protect your APIs from attacks.",
-    author: "user4",
-    topicId: "1",
-    status: "not_resolved",
-    tagIds: ["5", "6"],
-    createdAt: "2025-06-10T11:45:00Z",
-  },
-  {
-    id: "8",
-    title: "Use cases for Redis caching",
-    description: "How Redis can optimize your application.",
-    author: "user2",
-    topicId: "6",
-    status: "resolved",
-    tagIds: ["3", "13"],
-    createdAt: "2025-06-11T13:10:00Z",
-  },
-  {
-    id: "15",
-    title: "Design patterns in React",
-    description: "Using container and presentational components.",
-    author: "dev1",
-    topicId: "1",
-    status: "not_resolved",
-    tagIds: ["1", "9"],
-    createdAt: "2025-06-18T10:50:00Z",
-  },
-];
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
+import { getPosts, Post, QueryPostParams } from '@/api/postApi';
+import { topicApi, Topic } from '@/api/topic';
 
 interface StatsCardProps {
   title: string;
@@ -107,8 +13,10 @@ interface StatsCardProps {
   icon: React.ElementType;
   color?: "blue" | "green" | "red" | "purple"|"amber";
   trend?: number;
+  isLoading?: boolean;
 }
-const StatsCard = ({ title, value, icon: Icon, color = "blue" }: StatsCardProps) => (
+
+const StatsCard = ({ title, value, icon: Icon, color = "blue", isLoading = false }: StatsCardProps) => (
   <div className="bg-white rounded-lg shadow p-6 border-l-4 border-l-blue-500">
     <div className="flex items-center">
       <div className="flex-shrink-0">
@@ -117,29 +25,18 @@ const StatsCard = ({ title, value, icon: Icon, color = "blue" }: StatsCardProps)
       <div className="ml-5 w-0 flex-1">
         <dl>
           <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-          <dd className="text-lg font-medium text-gray-900">{value}</dd>
+          <dd className="text-lg font-medium text-gray-900">
+            {isLoading ? (
+              <div className="h-6 bg-gray-200 rounded animate-pulse"></div>
+            ) : (
+              value
+            )}
+          </dd>
         </dl>
       </div>
     </div>
   </div>
 );
-interface Topic {
-  id: string;
-  name: string;
-  postCount: number;
-  createdAt: string;
-}
-
-interface Post {
-  id: string;
-  title: string;
-  description: string;
-  author: string;
-  topicId: string;
-  status: string;
-  tagIds : string[];
-  createdAt: string;
-}
 
 interface TopicCardProps {
   topic: Topic;
@@ -148,16 +45,16 @@ interface TopicCardProps {
 }
 
 const TopicCard = ({ topic, posts, comments }: TopicCardProps) => {
-  const topicPosts = posts.filter(post => post.topicId === topic.id);
-  const resolvedPosts = topicPosts.filter(post => post.status === "resolved");
-  const unresolvedPosts = topicPosts.filter(post => post.status === "not_resolved");
+  const topicPosts = posts.filter(post => post.topic_id === parseInt(topic.id));
+  const resolvedPosts = topicPosts.filter(post => post.status === "solve");
+  const unresolvedPosts = topicPosts.filter(post => post.status === "problem");
 
   return (
     <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">{topic.name}</h3>
         <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-          {topic.postCount} posts
+          {topic._count?.posts || 0} posts
         </span>
       </div>
 
@@ -177,24 +74,13 @@ const TopicCard = ({ topic, posts, comments }: TopicCardProps) => {
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Created</span>
           <span className="font-medium text-gray-700">
-            {new Date(topic.createdAt).toLocaleDateString()}
+            {new Date(topic.created_at).toLocaleDateString('vi-VN')}
           </span>
         </div>
       </div>
     </div>
   );
 };
-
-interface Post {
-  id: string;
-  title: string;
-  description: string;
-  author: string;
-  topicId: string;
-  status: string;
-  tagIds: string[];
-  createdAt: string;
-}
 
 interface PostCardProps {
   post: Post;
@@ -204,43 +90,74 @@ interface PostCardProps {
 const PostCard = ({ post, topicName }: PostCardProps) => {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "resolved": return "text-green-600 bg-green-100";
-      case "not_resolved": return "text-red-600 bg-red-100";
-      case "deleted_by_admin": return "text-gray-600 bg-gray-100";
-      case "deleted_by_company": return "text-orange-600 bg-orange-100";
+      case "solve": return "text-green-600 bg-green-100";
+      case "problem": return "text-red-600 bg-red-100";
+      case "reject_by_admin_or_company_acc": return "text-gray-600 bg-gray-100";
       default: return "text-gray-600 bg-gray-100";
     }
   };
 
+  const getStatusDisplay = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'problem': 'Chưa giải quyết',
+      'solve': 'Đã giải quyết',
+      'reject_by_admin_or_company_acc': 'Bị từ chối'
+    };
+    return statusMap[status] || status;
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{post.title}</h3>
-        <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(post.status)}`}>
-          {post.status.replace("_", " ")}
-        </span>
-      </div>
-
-      <p className="text-gray-600 text-sm mb-4 line-clamp-2">{post.description}</p>
-
-      <div className="flex items-center justify-between text-sm text-gray-500">
-        <div className="flex items-center space-x-4">
-          <span>By {post.author}</span>
-          <span className="flex items-center">
-            <Tag className="h-4 w-4 mr-1" />
-            {topicName}
-          </span>
+    <Link href={`/posts/${post.id}`} className="block">
+      <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{post.title}</h3>
+          <div className="flex flex-col items-end space-y-1">
+            <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(post.status)}`}>
+              {getStatusDisplay(post.status)}
+            </span>
+            {post.is_pinned && (
+              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                Ghim
+              </span>
+            )}
+          </div>
         </div>
-        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+
+        <p className="text-gray-600 text-sm mb-4 line-clamp-2" 
+           dangerouslySetInnerHTML={{ __html: post.description.substring(0, 150) + '...' }}>
+        </p>
+
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <div className="flex items-center space-x-4">
+            <span>By {post.user?.full_name}</span>
+            <span className="flex items-center">
+              <Tag className="h-4 w-4 mr-1" />
+              {topicName}
+            </span>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1">
+              <Eye className="h-4 w-4" />
+              <span>{post.views}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <MessageCircle className="h-4 w-4" />
+              <span>{post.comments_count || 0}</span>
+            </div>
+            <span>{new Date(post.created_at).toLocaleDateString('vi-VN')}</span>
+          </div>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 };
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
 }
+
 const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPageChange }) => {
   const getPageNumbers = () => {
     const delta = 2;
@@ -333,81 +250,248 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
 
 export default function ModernDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredPosts, setFilteredPosts] = useState(postsMock);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
   const [showAllTopics, setShowAllTopics] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [topicsLoading, setTopicsLoading] = useState(true);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    totalPages: 0,
+    currentPage: 1,
+    limit: 6
+  });
+
+  const { user, isLoading } = useCurrentUser();
   const itemsPerPage = 6;
 
-  const [user, setUser] = useState<{ credential: string ;name?: string;
-  email?: string;} | null>(null);
-
+  // Load initial data
   useEffect(() => {
-    setUser({ credential: "mock-jwt-token-12345" });
-  }, []);
+    const loadInitialData = async () => {
+      try {
+        setLoading(true);
+        
+        // Load topics and posts in parallel
+        const [topicsResponse, postsResponse] = await Promise.all([
+          topicApi.findAllPublic(),
+          getPosts({ page: 1, limit: itemsPerPage })
+        ]);
 
-  useEffect(() => {
-    const filtered = postsMock.filter(post => 
-      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.author.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredPosts(filtered);
-    setCurrentPage(1);
-  }, [searchTerm]);
+        if (topicsResponse.success) {
+          setTopics(topicsResponse.data);
+        }
 
-  // Statistics
-  const totalPosts = postsMock.length;
-  const resolvedPosts = postsMock.filter(post => post.status === "resolved").length;
-  const unresolvedPosts = postsMock.filter(post => post.status === "not_resolved").length;
-  const totalTopics = topicsMock.length;
+        if (postsResponse.data) {
+          setPosts(postsResponse.data);
+          setFilteredPosts(postsResponse.data);
+          setPagination({
+            total: postsResponse.total || 0,
+            totalPages: postsResponse.totalPages || 1,
+            currentPage: postsResponse.page || 1,
+            limit: postsResponse.limit || itemsPerPage
+          });
+        }
 
-    const getTopicInfo = (topicId: string): { name: string } => {
-    const topic = topicsMock.find(t => t.id === topicId);
-      return topic ? { name: topic.name } : { name: "Unknown" };
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setLoading(false);
+        setPostsLoading(false);
+        setTopicsLoading(false);
+      }
     };
 
+    loadInitialData();
+  }, []);
 
+  // Search functionality
+  useEffect(() => {
+    const searchPosts = async () => {
+      if (!searchTerm.trim()) {
+        // If no search term, load regular posts
+        try {
+          setPostsLoading(true);
+          const response = await getPosts({ page: 1, limit: itemsPerPage });
+          if (response.data) {
+            setFilteredPosts(response.data);
+            setPagination({
+              total: response.total || 0,
+              totalPages: response.totalPages || 1,
+              currentPage: 1,
+              limit: response.limit || itemsPerPage
+            });
+          }
+        } catch (error) {
+          console.error("Error loading posts:", error);
+        } finally {
+          setPostsLoading(false);
+        }
+      } else {
+        // Search posts
+        try {
+          setPostsLoading(true);
+          const response = await getPosts({ 
+            search: searchTerm,
+            page: 1,
+            limit: itemsPerPage 
+          });
+          if (response.data) {
+            setFilteredPosts(response.data);
+            setPagination({
+              total: response.total || 0,
+              totalPages: response.totalPages || 1,
+              currentPage: 1,
+              limit: response.limit || itemsPerPage
+            });
+          }
+        } catch (error) {
+          console.error("Error searching posts:", error);
+          setFilteredPosts([]);
+        } finally {
+          setPostsLoading(false);
+        }
+      }
+      setCurrentPage(1);
+    };
 
-  // Pagination
-  const totalPages = Math.ceil(filteredPosts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentPosts = filteredPosts.slice(startIndex, endIndex);
+    const debounceTimer = setTimeout(searchPosts, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm]);
 
-  const displayedTopics = showAllTopics ? topicsMock : topicsMock.slice(0, 6);
+  // Handle pagination
+  const handlePageChange = async (newPage: number) => {
+    try {
+      setPostsLoading(true);
+      const params: QueryPostParams = { 
+        page: newPage, 
+        limit: itemsPerPage 
+      };
+      
+      if (searchTerm.trim()) {
+        params.search = searchTerm;
+      }
+
+      const response = await getPosts(params);
+      if (response.data) {
+        setFilteredPosts(response.data);
+        setPagination({
+          total: response.total || 0,
+          totalPages: response.totalPages || 1,
+          currentPage: response.page || newPage,
+          limit: response.limit || itemsPerPage
+        });
+        setCurrentPage(newPage);
+      }
+    } catch (error) {
+      console.error("Error loading page:", error);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  // Get topic name by ID
+  const getTopicInfo = (topicId: number): { name: string } => {
+    const topic = topics.find(t => parseInt(t.id) === topicId);
+    return topic ? { name: topic.name } : { name: "Unknown" };
+  };
+
+  // Calculate statistics
+  const totalPosts = posts.length;
+  const resolvedPosts = posts.filter(post => post.status === "solve").length;
+  const unresolvedPosts = posts.filter(post => post.status === "problem").length;
+  const totalTopics = topics.length;
+
+  const displayedTopics = showAllTopics ? topics : topics.slice(0, 6);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="animate-pulse">
+            <div className="bg-gray-300 rounded-2xl h-32 mb-8"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-gray-300 rounded-lg h-24"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Chào mừng trở lại! 👋</h2>
-              <p className="text-blue-100 text-lg">
-                Xin chào <span className="font-semibold">{user?.name || "User"}</span>
-              </p>
-              <p className="text-blue-200 text-sm mt-1">
-                Hãy cùng khám phá những nội dung mới nhất hôm nay
-              </p>
-            </div>
-            <div className="hidden md:block">
-              <div className="w-32 h-32 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                <Activity className="h-16 w-16 text-white" />
+        {isLoading ? (
+          <p>Đang tải...</p>
+        ) : (
+          // Welcome Section 
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {user?.avatar && (
+                  <img
+                    src={user.avatar}
+                    alt="Avatar"
+                    className="w-16 h-16 rounded-full border-2 border-white shadow"
+                  />
+                )}
+                <div>
+                  <h2 className="text-3xl font-bold mb-2">Chào mừng trở lại! 👋</h2>
+                  <p className="text-blue-100 text-lg">
+                    Xin chào <span className="font-semibold">{user?.full_name || "Người dùng"}</span>
+                  </p>
+                  <p className="text-blue-200 text-sm mt-1">
+                    Hãy cùng khám phá những nội dung mới nhất hôm nay
+                  </p>
+                </div>
+              </div>
+              <div className="hidden md:block">
+                <div className="w-32 h-32 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <Activity className="h-16 w-16 text-white" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard title="Tổng bài viết" value={totalPosts} icon={FileText} color="blue" trend={12} />
-          <StatsCard title="Đã giải quyết" value={resolvedPosts} icon={CheckCircle} color="green" trend={8} />
-          <StatsCard title="Chờ xử lý" value={unresolvedPosts} icon={Clock} color="amber" trend={-3} />
-          <StatsCard title="Chủ đề" value={totalTopics} icon={Tag} color="purple" trend={5} />
+          <StatsCard 
+            title="Tổng bài viết" 
+            value={pagination.total} 
+            icon={FileText} 
+            color="blue" 
+            isLoading={postsLoading}
+          />
+          <StatsCard 
+            title="Đã giải quyết" 
+            value={resolvedPosts} 
+            icon={CheckCircle} 
+            color="green" 
+            isLoading={postsLoading}
+          />
+          <StatsCard 
+            title="Chờ xử lý" 
+            value={unresolvedPosts} 
+            icon={Clock} 
+            color="amber" 
+            isLoading={postsLoading}
+          />
+          <StatsCard 
+            title="Chủ đề" 
+            value={totalTopics} 
+            icon={Tag} 
+            color="purple" 
+            isLoading={topicsLoading}
+          />
         </div>
 
         {/* Search Section */}
@@ -428,43 +512,45 @@ export default function ModernDashboard() {
           </div>
           {searchTerm && (
             <p className="mt-3 text-sm text-gray-600">
-              Tìm thấy <span className="font-medium text-blue-600">{filteredPosts.length}</span> kết quả cho "{searchTerm}"
+              Tìm thấy <span className="font-medium text-blue-600">{pagination.total}</span> kết quả cho "{searchTerm}"
             </p>
           )}
         </div>
 
         {/* Topics Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">Tất cả chủ đề</h3>
-            <button
-              onClick={() => setShowAllTopics(!showAllTopics)}
-              className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium transition-colors"
-            >
-              <span>{showAllTopics ? "Thu gọn" : "Xem tất cả"}</span>
-              <ChevronRight className={`h-4 w-4 transition-transform ${showAllTopics ? 'rotate-90' : ''}`} />
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedTopics.map((topic) => {
-            const topicPosts = postsMock.filter(post => post.topicId === topic.id);
-            const commentsCount = topicPosts.length * 2; // ví dụ mỗi post có 2 comment
+        {!topicsLoading && topics.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">Tất cả chủ đề</h3>
+              <button
+                onClick={() => setShowAllTopics(!showAllTopics)}
+                className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium transition-colors"
+              >
+                <span>{showAllTopics ? "Thu gọn" : "Xem tất cả"}</span>
+                <ChevronRight className={`h-4 w-4 transition-transform ${showAllTopics ? 'rotate-90' : ''}`} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {displayedTopics.map((topic) => {
+                const topicPosts = posts.filter(post => post.topic_id === parseInt(topic.id));
+                const commentsCount = topicPosts.reduce((total, post) => total + (post.comments_count || 0), 0);
 
-            return (
-               <Link key={topic.id} href={`/topics/${topic.id}`} className="block">
-                <TopicCard topic={topic} posts={postsMock} comments={commentsCount} />
-              </Link>
-            );
-          })}
+                return (
+                  <Link key={topic.id} href={`/topics/${topic.id}`} className="block">
+                    <TopicCard topic={topic} posts={posts} comments={commentsCount} />
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Posts Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">
-                {searchTerm ? `Kết quả tìm kiếm (${filteredPosts.length})` : "Bài viết mới nhất"}
+                {searchTerm ? `Kết quả tìm kiếm (${pagination.total})` : "Bài viết mới nhất"}
               </h3>
               <div className="flex items-center space-x-2 text-sm text-gray-500">
                 <Clock className="h-4 w-4" />
@@ -474,34 +560,43 @@ export default function ModernDashboard() {
           </div>
           
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentPosts.map((post) => {
-                const topicInfo = getTopicInfo(post.topicId);
-                return (
-                  <PostCard 
-                    key={post.id} 
-                    post={post} 
-                    topicName={topicInfo.name}
-                    
-                  />
-                );
-              })}
-            </div>
-            
-            {filteredPosts.length === 0 && (
-              <div className="text-center py-12">
-                <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Không tìm thấy bài viết nào phù hợp</p>
+            {postsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-gray-200 rounded-lg h-48 animate-pulse"></div>
+                ))}
               </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredPosts.map((post) => {
+                    const topicInfo = getTopicInfo(post.topic_id || 0);
+                    return (
+                      <PostCard 
+                        key={post.id} 
+                        post={post} 
+                        topicName={topicInfo.name}
+                      />
+                    );
+                  })}
+                </div>
+                
+                {filteredPosts.length === 0 && !postsLoading && (
+                  <div className="text-center py-12">
+                    <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">Không tìm thấy bài viết nào phù hợp</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {pagination.totalPages > 1 && !postsLoading && (
             <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={handlePageChange}
             />
           )}
         </div>

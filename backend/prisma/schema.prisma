@@ -83,6 +83,7 @@ model Post {
   id               Int         @id @default(autoincrement())
   title            String      @db.VarChar
   description      String
+  images           String[]    @default([])
   user_id          Int?
   topic_id         Int?
   company_id       Int?

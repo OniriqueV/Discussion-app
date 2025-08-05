@@ -1,7 +1,5 @@
-// src/lib/api/topic.ts
+// src/api/topic.ts - Updated API client
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
-
 
 export interface Topic {
   id: string;
@@ -41,82 +39,98 @@ export interface ApiResponse<T> {
 }
 
 class TopicApi {
-  private baseUrl = `${API_URL}/topics`;
+  private adminBaseUrl = `${API_URL}/admin/topics`; // Admin routes
+  private publicBaseUrl = `${API_URL}/topics`; // Public routes
 
-  // 👇 sửa lại để đồng bộ với useAuthRedirect
   private getAuthToken(): string | null {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('token');
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const token = this.getAuthToken();
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...options.headers,
+        },
+        ...options,
+      });
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      let errorMessage = `HTTP error! status: ${response.status}`;
-
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch (e) {
-        // Fallback
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          // If we can't parse the error response, use the status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
-      throw new Error(errorMessage);
+      return response.json();
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
+  // Admin methods (require admin role)
   async create(data: CreateTopicDto): Promise<ApiResponse<Topic>> {
-    return this.request<Topic>('', {
+    return this.request<Topic>(this.adminBaseUrl, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async findAll(): Promise<ApiResponse<Topic[]>> {
-    return this.request<Topic[]>('');
+  async findAllAdmin(): Promise<ApiResponse<Topic[]>> {
+    return this.request<Topic[]>(this.adminBaseUrl);
   }
 
   async getStats(): Promise<ApiResponse<any>> {
-    return this.request<any>('/stats');
+    return this.request<any>(`${this.adminBaseUrl}/stats`);
   }
 
-  async findBySlug(slug: string): Promise<ApiResponse<Topic>> {
-    return this.request<Topic>(`/${encodeURIComponent(slug)}`);
+  async findBySlugAdmin(slug: string): Promise<ApiResponse<Topic>> {
+    return this.request<Topic>(`${this.adminBaseUrl}/${encodeURIComponent(slug)}`);
   }
 
   async update(slug: string, data: UpdateTopicDto): Promise<ApiResponse<Topic>> {
-    return this.request<Topic>(`/${encodeURIComponent(slug)}`, {
+    return this.request<Topic>(`${this.adminBaseUrl}/${encodeURIComponent(slug)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
   async delete(slug: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/${encodeURIComponent(slug)}`, {
+    return this.request<void>(`${this.adminBaseUrl}/${encodeURIComponent(slug)}`, {
       method: 'DELETE',
     });
   }
 
   async bulkDelete(data: BulkDeleteDto): Promise<ApiResponse<any>> {
-    return this.request<any>('', {
+    return this.request<any>(this.adminBaseUrl, {
       method: 'DELETE',
       body: JSON.stringify(data),
     });
+  }
+
+  // Public methods (for authenticated users - ca_user, admin, etc.)
+  async findAll(): Promise<ApiResponse<Topic[]>> {
+    return this.request<Topic[]>(this.publicBaseUrl);
+  }
+
+  async findAllPublic(): Promise<ApiResponse<Topic[]>> {
+    // This method now calls the public endpoint
+    return this.findAll();
+  }
+
+  async findBySlug(slug: string): Promise<ApiResponse<Topic>> {
+    return this.request<Topic>(`${this.publicBaseUrl}/${encodeURIComponent(slug)}`);
   }
 }
 

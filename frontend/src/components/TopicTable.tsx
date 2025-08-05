@@ -5,10 +5,12 @@ import { useMemo, useState, useEffect } from "react";
 import { DEFAULT_PAGE_SIZE, MESSAGES } from "@/config/constants";
 import { toast } from "react-toastify";
 import ConfirmModal from "./ConfirmModal";
+import { useCurrentUser } from "@/hooks/useAuthRedirect";
 
 type SortKey = "name" | "postCount" | "created_at";
 
 export default function TopicTable() {
+  const { user: currentUser, isLoading: userLoading } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -20,10 +22,20 @@ export default function TopicTable() {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
 
+  // Check authentication and permissions
+  useEffect(() => {
+    if (!userLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user'))) {
+      toast.error("Bạn không có quyền truy cập trang này");
+      return;
+    }
+  }, [currentUser, userLoading]);
+
   // Load data from API
   useEffect(() => {
-    loadTopics();
-  }, []);
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'ca_user')) {
+      loadTopics();
+    }
+  }, [currentUser]);
 
   const loadTopics = async () => {
     try {
@@ -157,6 +169,153 @@ export default function TopicTable() {
     });
     setConfirmVisible(true);
   };
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Đang kiểm tra quyền truy cập...</div>
+      </div>
+    );
+  }
+
+  // Check permissions
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'ca_user')) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Bạn không có quyền truy cập trang này</p>
+          <p className="text-sm text-gray-500">Chỉ admin và ca_user mới có thể quản lý topics</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
