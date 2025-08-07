@@ -447,7 +447,7 @@ The Team`
     }
 
     // Generate image URLs
-    const imageUrls = files.map(file => `/uploads/post-images/${file.filename}`);
+    const imageUrls = files.map(file => `http://localhost:3001/uploads/post-images/${file.filename}`);
 
     // Get current images and add new ones
     const currentImages = post.images || []; // Uncomment after running migration

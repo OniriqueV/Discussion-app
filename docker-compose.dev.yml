@@ -1,0 +1,89 @@
+# version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: postgres-db-dev
+    restart: always
+    environment:
+      POSTGRES_USER: vanh
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: discussion
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - vietanh-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vanh -d discussion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nest-backend-dev
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - /app/.prisma
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://vanh:123456@db:5432/discussion
+      - JWT_SECRET=supersecretkey123
+      # ✅ Let Prisma auto-detect engine
+      - PRISMA_CLI_QUERY_ENGINE_TYPE=binary
+      - PRISMA_GENERATE_SKIP_AUTOINSTALL=true
+      # ✅ Disable telemetry
+      - CHECKPOINT_DISABLE=1
+      - PRISMA_HIDE_UPDATE_MESSAGE=1
+      # ✅ Platform specific settings
+      - PRISMA_ENGINE_PROTOCOL=graphql
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - vietanh-net-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: next-frontend-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - vietanh-net-dev
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+
+networks:
+  vietanh-net-dev:
+    driver: bridge

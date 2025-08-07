@@ -1,19 +1,17 @@
-// app/posts/edit/[id]/page.tsx
 import PostForm from "@/components/PostForm";
 
-interface Props {
-  params: {
-    id: string;
-  };
-}
+export default async function EditPostPage(props: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await props.params;
+  const postId = parseInt(id);
 
-export default function EditPostPage({ params }: Props) {
-  const postId = parseInt(params.id);
-  
   if (isNaN(postId)) {
     return (
       <div className="p-4">
-        <h1 className="text-xl font-semibold text-red-600">ID bài viết không hợp lệ</h1>
+        <h1 className="text-xl font-semibold text-red-600">
+          ID bài viết không hợp lệ
+        </h1>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 // src/api/topic.ts - Updated API client
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
+console.log("API ĐANG GỌI LÀ",process.env.NEXT_PUBLIC_API_URL)
 export interface Topic {
   id: string;
   name: string;

@@ -39,4 +39,13 @@ export class QueryPostDto {
   @Type(() => Boolean)
   @IsBoolean()
   include_deleted?: boolean;
+
+  // ✅ Thêm 2 dòng này
+  @IsOptional()
+  @IsString()
+  sort_by?: string;
+
+  @IsOptional()
+  @IsString()
+  sort_order?: 'asc' | 'desc';
 }
