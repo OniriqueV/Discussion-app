@@ -1,5 +1,4 @@
 # version: '3.8'
-
 services:
   db:
     image: postgres:16
@@ -32,19 +31,18 @@ services:
       - ./backend:/app
       - /app/node_modules
       - /app/.prisma
+      # ✅ QUAN TRỌNG: Mount uploads folder để persist files
+      - ./uploads:/app/uploads
     env_file:
       - ./backend/.env
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://vanh:123456@db:5432/discussion
       - JWT_SECRET=supersecretkey123
-      # ✅ Let Prisma auto-detect engine
       - PRISMA_CLI_QUERY_ENGINE_TYPE=binary
       - PRISMA_GENERATE_SKIP_AUTOINSTALL=true
-      # ✅ Disable telemetry
       - CHECKPOINT_DISABLE=1
       - PRISMA_HIDE_UPDATE_MESSAGE=1
-      # ✅ Platform specific settings
       - PRISMA_ENGINE_PROTOCOL=graphql
     depends_on:
       db:
@@ -77,6 +75,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - vietanh-net-dev
+    restart: unless-stopped
+
+  # ✅ THÊM: Nginx để serve static files (tùy chọn, nhưng recommended cho production)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy-dev
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      - backend
+      - frontend
     networks:
       - vietanh-net-dev
     restart: unless-stopped

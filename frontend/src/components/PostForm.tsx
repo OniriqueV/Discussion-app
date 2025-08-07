@@ -148,74 +148,48 @@ export default function PostForm({ postId }: PostFormProps) {
   const handleImageUpload = async (file: File): Promise<string> => {
     try {
       if (postId) {
-        // If we're editing a post, upload directly to that post
+        // Editing existing post - upload directly to post
         const result = await uploadPostImages(postId, [file]);
         
-        // Reload post data to get updated images
-        const updatedPost = await getPost(postId);
-        setInitialPost(updatedPost);
+        // Return full URL instead of relative path
+        const relativePath = result.images[0];
+        return `${process.env.NEXT_PUBLIC_UPLOADS_URL}${relativePath}`;
         
-        // Return the URL of the uploaded image
-        return result.images[result.images.length - 1];
       } else {
-        // For new posts, try to upload via API first
-        try {
-          const result = await uploadTempImages([file]);
-          const imageUrl = result.images[0];
-          
-          // Track temp images for cleanup/reference
-          setTempImageUrls(prev => [...prev, imageUrl]);
-          
-          return imageUrl;
-        } catch (apiError) {
-          console.warn("API upload failed, trying Next.js API route:", apiError);
-          
-          // Fallback to Next.js API route
-          const formData = new FormData();
-          formData.append('file', file);
-
-          const response = await fetch('/api/uploads/temp', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error('Next.js API upload failed');
-          }
-
-          const data = await response.json();
-          return data.url;
-        }
+        // New post - upload to temp directory
+        const result = await uploadTempImages([file]);
+        
+        // Return full URL instead of relative path
+        const relativePath = result.images[0];
+        return `${process.env.NEXT_PUBLIC_UPLOADS_URL}${relativePath}`;
       }
     } catch (error: any) {
       console.error("Error uploading image:", error);
       toast.error("Lỗi khi tải ảnh lên. Vui lòng thử lại.");
-      
-      // As last resort, use blob URL (but warn user)
-      toast.warning("Đang sử dụng ảnh tạm thời. Vui lòng lưu bài viết để hoàn tất upload.");
-      return URL.createObjectURL(file);
+      throw error;
     }
-  };
-
-  // Function to extract image URLs from HTML content
-  const extractImageUrls = (content: string): string[] => {
-    const imgRegex = /<img[^>]+src="([^">]+)"/g;
-    const urls: string[] = [];
-    let match;
-    
-    while ((match = imgRegex.exec(content)) !== null) {
-      urls.push(match[1]);
-    }
-    
-    return urls;
   };
 
   // Function to fix image URLs in content
-  const fixImageUrls = (content: string): string => {
-    // Replace relative paths with absolute paths
-    return content.replace(/src="\.\.\/uploads\/temp\//g, 'src="/uploads/temp/')
-           .replace(/src="uploads\/temp\//g, 'src="/uploads/temp/');
-  };
+    const fixImageUrls = (html: string): string => {
+      const baseUrl = process.env.NEXT_PUBLIC_UPLOADS_URL || "http://localhost:8080";
+
+      return html.replace(/src="(\/?uploads\/[^"]+)"/g, (match, path) => {
+        // Bỏ dấu `/` đầu nếu có
+        const cleanedPath = path.replace(/^\/+/, '');
+
+        // Tránh thêm baseUrl nếu đã có http
+        if (/^https?:\/\//.test(path)) {
+          return match;
+        }
+
+        return `src="${baseUrl}/${cleanedPath}"`;
+      });
+    };
+
+
+
+
 
   // Form submission handler
   const onSubmit = async (data: FormValues) => {

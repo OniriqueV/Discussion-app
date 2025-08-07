@@ -441,85 +441,74 @@ The Team`
       throw new NotFoundException('Post not found');
     }
 
-    // Check permissions - only author can upload images
     if (post.user_id !== userId) {
       throw new ForbiddenException('You can only upload images to your own posts');
     }
 
-    // Generate image URLs
-    const imageUrls = files.map(file => `http://localhost:3001/uploads/post-images/${file.filename}`);
+    // Lưu đường dẫn tương đối vào DB
+    const relativePaths = files.map(file => `/uploads/post-images/${file.filename}`);
 
-    // Get current images and add new ones
-    const currentImages = post.images || []; // Uncomment after running migration
-    const updatedImages = [...currentImages, ...imageUrls]; // Uncomment after running migration
-    // const updatedImages = [...imageUrls]; // Temporary fix
+    const updatedImages = [...(post.images || []), ...relativePaths];
 
-    // Update post with new images
     const updatedPost = await this.prisma.post.update({
       where: { id },
       data: {
-        images: updatedImages, // Uncomment after running migration
+        images: updatedImages,
         updated_at: new Date()
       }
     });
 
-    return {
-      message: 'Images uploaded successfully',
-      images: imageUrls,
-      totalImages: updatedImages.length
-    };
+  return {
+    images: relativePaths,
+    totalImages: updatedImages.length
+  };
+}
+
+async deleteImage(id: number, imageIndex: number, userId: number) {
+  const post = await this.prisma.post.findUnique({
+    where: { id, deleted_at: null },
+    include: { user: true }
+  });
+
+  if (!post) {
+    throw new NotFoundException('Post not found');
   }
 
-  async deleteImage(id: number, imageIndex: number, userId: number) {
-    const post = await this.prisma.post.findUnique({
-      where: { id, deleted_at: null },
-      include: { user: true }
-    });
-
-    if (!post) {
-      throw new NotFoundException('Post not found');
-    }
-
-    // Check permissions - only author can delete images
-    if (post.user_id !== userId) {
-      throw new ForbiddenException('You can only delete images from your own posts');
-    }
-
-    const currentImages = post.images || []; // Uncomment after running migration
-    
-    if (imageIndex < 0 || imageIndex >= currentImages.length) {
-      throw new BadRequestException('Invalid image index');
-    }
-
-    // Remove image at specified index
-    const updatedImages = currentImages.filter((_, index) => index !== imageIndex); // Uncomment after running migration
-    // const updatedImages: string[] = []; // Temporary fix
-
-    // Update post
-    const updatedPost = await this.prisma.post.update({
-      where: { id },
-      data: {
-        images: updatedImages, // Uncomment after running migration
-        updated_at: new Date()
-      }
-    });
-
-    return {
-      message: 'Image deleted successfully',
-      totalImages: updatedImages.length
-    };
+  if (post.user_id !== userId) {
+    throw new ForbiddenException('You can only delete images from your own posts');
   }
 
-  async uploadTempImages(files: Express.Multer.File[], userId: number) {
-    // Generate image URLs for temporary uploads
-    const imageUrls = files.map(file => `/uploads/post-images/${file.filename}`);
+  const currentImages = post.images || [];
 
-    return {
-      message: 'Temporary images uploaded successfully',
-      images: imageUrls,
-      totalImages: imageUrls.length
-    };
+  if (imageIndex < 0 || imageIndex >= currentImages.length) {
+    throw new BadRequestException('Invalid image index');
   }
+
+  const updatedImages = currentImages.filter((_, index) => index !== imageIndex);
+
+  const updatedPost = await this.prisma.post.update({
+    where: { id },
+    data: {
+      images: updatedImages,
+      updated_at: new Date()
+    }
+  });
+
+  return {
+    message: 'Image deleted successfully',
+    totalImages: updatedImages.length
+  };
+}
+
+async uploadTempImages(files: Express.Multer.File[], userId: number) {
+  // Trả về path tương đối, không lưu vào DB
+  const relativePaths = files.map(file => `/uploads/post-images/${file.filename}`);
+
+  return {
+    images: relativePaths,
+    totalImages: relativePaths.length
+  };
+}
 
   async incrementViewCount(id: number): Promise<void> {
   await this.prisma.post.update({

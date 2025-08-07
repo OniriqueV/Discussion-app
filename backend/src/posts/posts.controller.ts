@@ -25,10 +25,15 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { multerPostImagesConfig } from '../common/config/multer-config';
+import { ConfigService } from '@nestjs/config';
+
+
 @Controller('posts')
 @UseGuards(JwtAuthGuard)
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(private readonly postsService: PostsService,
+    private readonly configService: ConfigService
+  ) {}
 
   @Post()
   create(@Body() createPostDto: CreatePostDto, @Request() req) {
@@ -102,6 +107,7 @@ export class PostsController {
     return this.postsService.togglePin(id);
   }
 
+  
   @Post(':id/upload-images')
   @UseInterceptors(FilesInterceptor('images', 10, multerPostImagesConfig))
   async uploadImages(
@@ -113,7 +119,19 @@ export class PostsController {
       throw new BadRequestException('No files uploaded');
     }
 
-    return this.postsService.uploadImages(id, files, req.user.id);
+    const result = await this.postsService.uploadImages(id, files, req.user.id);
+
+    // Convert relative paths to full URLs
+    const appUrl = this.configService.get('APP_URL');
+    const fullImageUrls = result.images.map(path => `${appUrl}${path}`);
+    
+
+
+    return {
+      message: 'Images uploaded successfully',
+      images: fullImageUrls,
+      totalImages: fullImageUrls.length,
+    };
   }
 
   @Delete(':id/images/:imageIndex')
@@ -126,22 +144,31 @@ export class PostsController {
   }
 
   @Post('upload-temp-images')
-  @UseInterceptors(FilesInterceptor('images', 10, multerPostImagesConfig))
-  async uploadTempImages(
-    @UploadedFiles() files: Express.Multer.File[],
-    @Request() req
-  ) {
-    if (!files || files.length === 0) {
-      throw new BadRequestException('No files uploaded');
+    @UseInterceptors(FilesInterceptor('images', 10, multerPostImagesConfig))
+    async uploadTempImages(
+      @UploadedFiles() files: Express.Multer.File[],
+      @Request() req
+    ) {
+      if (!files || files.length === 0) {
+        throw new BadRequestException('No files uploaded');
+      }
+
+      const result = await this.postsService.uploadTempImages(files, req.user.id);
+
+      const appUrl = this.configService.get('APP_URL');
+      const fullImageUrls = result.images.map(path => `${appUrl}${path}`);
+
+      return {
+        message: 'Temporary images uploaded successfully',
+        images: fullImageUrls,
+        totalImages: fullImageUrls.length
+      };
     }
-
-    return this.postsService.uploadTempImages(files, req.user.id);
-  }
-
+  
+  
   @Patch(':id/view')
     @HttpCode(HttpStatus.NO_CONTENT)
     async incrementView(@Param('id', ParseIntPipe) id: number) {
       await this.postsService.incrementViewCount(id);
-    }
-
-}
+    } 
+  }

@@ -156,50 +156,77 @@ export const deletePost = async (id: number) => {
   return res.data;
 };
 
-// SỬA HÀM uploadPostImages
-export const uploadPostImages = async (id: number, files: File[]) => {
-  const formData = new FormData();
-  files.forEach((file) => {
-    formData.append('images', file);
-  });
+const UPLOADS_URL = process.env.NEXT_PUBLIC_UPLOADS_URL || "http://localhost:8080";
 
-  const res = await axios.post(`${API_URL}/posts/${id}/upload-images`, formData, {
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  
-  const result = res.data;
-  if (result.images) {
-    result.images = result.images.map(fixImageUrl);
-  }
-  
-  return result;
+// Helper function to ensure proper image URLs
+const normalizeImageUrl = (url: string): string => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/uploads/')) return `${UPLOADS_URL}${url}`;
+  return `${UPLOADS_URL}/uploads/${url}`;
 };
 
-// SỬA HÀM uploadTempImages
+// Upload images for existing post
+export const uploadPostImages = async (postId: number, files: File[]) => {
+  const formData = new FormData();
+  files.forEach(file => formData.append('images', file));
+
+  const { data } = await axios.post(
+    `${API_URL}/posts/${postId}/upload-images`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
+  return {
+    ...data,
+    images: data.images?.map(normalizeImageUrl) || []
+  };
+};
+
+// Upload temporary images for new posts
 export const uploadTempImages = async (files: File[]) => {
   const formData = new FormData();
-  files.forEach((file) => {
-    formData.append('images', file);
-  });
+  files.forEach(file => formData.append('images', file));
 
-  const res = await axios.post(`${API_URL}/posts/upload-temp-images`, formData, {
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  
-  const result = res.data;
-  if (result.images) {
-    result.images = result.images.map(fixImageUrl);
-  }
-  
-  return result;
+  const { data } = await axios.post(
+    `${API_URL}/posts/upload-temp-images`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
+  return {
+    ...data,
+    images: data.images?.map(normalizeImageUrl) || []
+  };
 };
 
+// Single image upload handler (unified)
+export const uploadSingleImage = async (file: File, postId?: number): Promise<string> => {
+  try {
+    if (postId) {
+      // Upload to existing post
+      const result = await uploadPostImages(postId, [file]);
+      return result.images[0] || '';
+    } else {
+      // Upload as temp image
+      const result = await uploadTempImages([file]);
+      return result.images[0] || '';
+    }
+  } catch (error) {
+    console.error('Image upload failed:', error);
+    throw new Error('Failed to upload image');
+  }
+};
 // GIỮ NGUYÊN các hàm còn lại...
 export const deletePostImage = async (id: number, imageIndex: number) => {
   const res = await axios.delete(`${API_URL}/posts/${id}/images/${imageIndex}`, {

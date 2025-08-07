@@ -69,6 +69,11 @@ async function bootstrap() {
   // ✅ Serve static files
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
+    setHeaders: (res) => {
+      // Enable CORS for images
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cache-Control', 'public, max-age=31557600'); // 1 year
+    },
   });
 
   // ✅ Global validation
