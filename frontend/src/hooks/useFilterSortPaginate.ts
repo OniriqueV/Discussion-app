@@ -9,6 +9,7 @@ export type FilterOptions<T> = {
   statusField?: keyof T;
   initialSortField?: string | null;
   initialSortOrder?: SortOrder;
+  customFilter?: (item: T) => boolean; // 👈 Thêm dòng này
 };
 
 export interface PaginationResult<T> {
@@ -38,6 +39,7 @@ export function useFilterSortPaginate<T>(
     statusField,
     initialSortField = null,
     initialSortOrder = "asc",
+    customFilter, // 👈 destructure luôn
   }: FilterOptions<T> = {}
 ): PaginationResult<T> {
   const [page, setPage] = useState(0);
@@ -62,6 +64,11 @@ export function useFilterSortPaginate<T>(
       result = result.filter(item => item[statusField] === statusFilter);
     }
 
+    // Custom filter
+    if (customFilter) {
+      result = result.filter(customFilter);
+    }
+
     // Sorting
     if (sortField) {
       result.sort((a, b) => {
@@ -79,7 +86,16 @@ export function useFilterSortPaginate<T>(
     }
 
     return result;
-  }, [data, searchTerm, searchFields, statusFilter, statusField, sortField, sortOrder]);
+  }, [
+    data,
+    searchTerm,
+    searchFields,
+    statusFilter,
+    statusField,
+    sortField,
+    sortOrder,
+    customFilter, // 👈 thêm dependency
+  ]);
 
   const paginatedData = useMemo(() => {
     return filteredData.slice(page * pageSize, (page + 1) * pageSize);
@@ -94,6 +110,6 @@ export function useFilterSortPaginate<T>(
     setSortField,
     sortOrder,
     setSortOrder,
-    filteredData
+    filteredData,
   };
 }

@@ -1,32 +1,37 @@
-// hooks/useAuthRedirect.ts
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
+import { toast } from "react-toastify";
+
 
 type Role = "admin" | "ca_user" | "member";
 
 interface JwtPayload {
-  id: number; // thêm để có thể dùng user.id
-  full_name: string; // thêm để hiện tên người dùng
+  id: number;
+  full_name: string;
   email: string;
   role: Role;
   exp: number;
-  sub: string; // user id dưới dạng string
+  sub: string; // user id dưới dạng string trong JWT
   company_id?: number;
   avatar?: string;
+  day_of_birth?: string;
 }
 
 export function useAuthRedirect(...requiredRoles: Role[]) {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<Role | null>(null);
+  const notifiedRef = useRef(false); // ✅ ngăn spam thông báo
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    
     if (!token) {
-      alert("Vui lòng đăng nhập");
+      if (!notifiedRef.current) {
+        toast.error("Vui lòng đăng nhập");
+        notifiedRef.current = true;
+      }
       router.push("/login");
       return;
     }
@@ -36,7 +41,10 @@ export function useAuthRedirect(...requiredRoles: Role[]) {
       const now = Date.now() / 1000;
 
       if (decoded.exp < now) {
-        alert("Phiên đăng nhập đã hết hạn");
+        if (!notifiedRef.current) {
+          toast.error("Phiên đăng nhập đã hết hạn");
+          notifiedRef.current = true;
+        }
         localStorage.removeItem("token");
         router.push("/login");
         return;
@@ -45,15 +53,19 @@ export function useAuthRedirect(...requiredRoles: Role[]) {
       setUserRole(decoded.role);
       setIsAuthenticated(true);
 
-      // Check role-based access
       if (requiredRoles.length > 0 && !requiredRoles.includes(decoded.role)) {
-        alert("Bạn không có quyền truy cập trang này");
+        if (!notifiedRef.current) {
+          // toast.error("Bạn không có quyền truy cập trang này");
+          notifiedRef.current = true;
+        }
         router.push("/dashboard");
         return;
       }
-
     } catch (err) {
-      alert("Token không hợp lệ");
+      if (!notifiedRef.current) {
+        toast.error("Token không hợp lệ");
+        notifiedRef.current = true;
+      }
       localStorage.removeItem("token");
       router.push("/login");
     }
@@ -62,7 +74,8 @@ export function useAuthRedirect(...requiredRoles: Role[]) {
   return { isAuthenticated, userRole };
 }
 
-// Hook to get current user info from token
+
+// ✅ FIX: Ensure user ID is always number for consistency
 export function useCurrentUser() {
   const [user, setUser] = useState<{
     id: number;
@@ -71,15 +84,12 @@ export function useCurrentUser() {
     company_id?: number;
     full_name: string;
     day_of_birth?: string;
-    avatar?: string; 
-    
+    avatar?: string;
   } | null>(null);
-  
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-
     if (!token) {
       setIsLoading(false);
       return;
@@ -88,18 +98,17 @@ export function useCurrentUser() {
     try {
       const decoded: JwtPayload = jwtDecode(token);
       const now = Date.now() / 1000;
-
+      
       if (decoded.exp >= now) {
         setUser({
           id: parseInt(decoded.sub),
-          // sub: decoded.sub,
           email: decoded.email,
           role: decoded.role,
           company_id: decoded.company_id,
           full_name: decoded.full_name,
           avatar: decoded.avatar,
+          day_of_birth: decoded.day_of_birth, // ✅ NOW AVAILABLE
         });
-
       } else {
         localStorage.removeItem("token");
         console.warn("Token expired");
@@ -114,5 +123,3 @@ export function useCurrentUser() {
 
   return { user, isLoading };
 }
-
-

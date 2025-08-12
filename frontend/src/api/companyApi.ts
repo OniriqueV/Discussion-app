@@ -53,6 +53,15 @@ export const getCompany = async (id: number): Promise<Company> => {
   };
 };
 
+// 🆕 NEW FUNCTION: Lấy danh sách công ty đơn giản
+export const getCompaniesList = async () => {
+  const response = await axios.get(`${API_URL}/companies/list`, {
+    headers: getAuthHeaders(), // cần thêm dòng này
+  });
+  return response.data;
+};
+
+
 // 🔹 Create new company
 export const createCompany = async (data: Partial<Company>) => {
   const res = await axios.post(`${API_URL}/companies`, data, {

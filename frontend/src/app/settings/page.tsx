@@ -22,8 +22,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
+      console.log("👤 User data from JWT:", user); // Debug log
       setValue("fullName", user.full_name);
+      
+      // ✅ Now day_of_birth is available from JWT
       if (user.day_of_birth) {
+        console.log("🎂 DOB from JWT:", user.day_of_birth); // Debug log
         setDob(parseISO(user.day_of_birth));
       }
     }
@@ -74,7 +78,13 @@ export default function SettingsPage() {
 
     try {
       await userService.updateUser(user.id, payload);
-      toast.success("Cập nhật thành công");
+      toast.success("Cập nhật thành công! Vui lòng đăng nhập lại để thấy thay đổi.");
+      
+      // Optional: Force logout to get new JWT with updated info
+      // localStorage.removeItem("token");
+      // localStorage.removeItem("user");
+      // window.location.href = "/login";
+      
     } catch (e) {
       toast.error("Cập nhật thất bại");
     }
@@ -88,8 +98,8 @@ export default function SettingsPage() {
   if (isLoading) return <div className="p-4 text-center">Đang tải...</div>;
   if (!user) return <div className="p-4 text-center">Không tìm thấy người dùng</div>;
 
+  console.log("🎂 Current DOB state:", dob); // Debug log
   console.log("Avatar URL:", user?.avatar);
-
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -105,11 +115,9 @@ export default function SettingsPage() {
           />
           <h1 className="text-2xl font-bold mb-6">Cài đặt tài khoản</h1>
 
-
           <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-6">
             
             <AvatarUploader avatarUrl={user.avatar} />
-
 
             <div>
               <label className="block text-sm mb-2 font-medium text-gray-700">Họ tên</label>

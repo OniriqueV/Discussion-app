@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config'; // ✅ Import ConfigService
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private configService: ConfigService) { // ✅ Inject ConfigService
+  constructor(private configService: ConfigService) {
     const jwtSecret = configService.get<string>('JWT_SECRET');
     
-    // ✅ Debug logs
     console.log('🔑 JWT_SECRET found:', !!jwtSecret);
     console.log('🔑 JWT_SECRET value:', jwtSecret);
     
@@ -21,18 +20,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: jwtSecret, // ✅ Sử dụng ConfigService
+      secretOrKey: jwtSecret,
     });
   }
 
   async validate(payload: any) {
     console.log('🔍 JWT Payload:', payload);
     
+    // ✅ FIX: Convert user ID to number để tránh lỗi Prisma
     return {
-      id: payload.sub,
+      id: parseInt(payload.sub), // Convert string to number
       email: payload.email,
       role: payload.role,
-      company_id: payload.company_id
+      company_id: payload.company_id,
+      full_name: payload.full_name,
+      avatar: payload.avatar,
+      day_of_birth: payload.day_of_birth,
     };
   }
 }

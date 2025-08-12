@@ -328,4 +328,31 @@ export class CompanyService {
       },
     };
   }
+
+  async getCompaniesList(user: any) {
+    let where: Prisma.CompanyWhereInput = {
+      deleted_at: null,
+      status: 'active', // Chỉ lấy công ty đang hoạt động
+    };
+
+    // Nếu không phải admin, chỉ lấy công ty của user đó
+    if (user.role !== 'admin') {
+      if (!user.company_id) {
+        return []; // Nếu user không thuộc công ty nào
+      }
+      where.id = user.company_id;
+    }
+
+    const companies = await this.prisma.company.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return companies;
+  }
+
 }

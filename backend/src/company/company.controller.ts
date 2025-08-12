@@ -58,6 +58,12 @@ export class CompanyController {
     return await this.companyService.findAll(+page, +limit, search, user);
   }
 
+  @Get('list')
+  @Roles('admin', 'ca_user', 'member')
+  async getCompaniesList(@Request() req: any) {
+    return this.companyService.getCompaniesList(req.user);
+  }
+
   @Get(':id')
   @Roles('admin', 'ca_user')
   @ApiOperation({ summary: 'Get company by ID' })
