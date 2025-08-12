@@ -22,6 +22,7 @@ import { AssignCaUserDto } from './dto/assign-ca-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { GetRankingDto } from './dto/get-ranking.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
@@ -38,7 +39,51 @@ export class UserController {
     return this.userService.create(dto, req.user);
   }
 
-  @Roles('admin', 'ca_user')
+  // ✅ ĐẶT TẤT CẢ ROUTES CỐ ĐỊNH TRƯỚC ROUTES DYNAMIC (:id)
+  
+  // Endpoint mới để admin gán member thành ca_user
+  @Roles('admin')
+  @Post('assign-ca-users')
+  @HttpCode(HttpStatus.OK)
+  assignCaUsers(
+    @Body(ValidationPipe) dto: AssignCaUserDto,
+    @Req() req
+  ) {
+    return this.userService.assignCaUsers(dto, req.user);
+  }
+
+  // ✅ RANKING ROUTES - ĐẶT TRƯỚC :id
+  @Roles('admin', 'ca_user', 'member')
+  @Get('ranking')
+  getRanking(
+    @Query(new ValidationPipe({ transform: true })) dto: GetRankingDto,
+    @Req() req
+  ) {
+    return this.userService.getRanking(dto, req.user);
+  }
+
+  @Roles('admin', 'ca_user', 'member')
+  @Get('ranking/:userId')
+  getUserRank(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Req() req: any,
+    @Query('period') period: 'total' | 'weekly' | 'monthly' | 'yearly' = 'total'
+  ) {
+    return this.userService.getUserRank(userId, period, req.user);
+  }
+
+  // Get current user's rank (convenience endpoint)
+  @Roles('admin', 'ca_user', 'member')
+  @Get('my-rank')
+  getMyRank(
+    @Req() req: any,
+    @Query('period') period: 'total' | 'weekly' | 'monthly' | 'yearly' = 'total',
+  ) {
+    return this.userService.getUserRank(req.user.id, period, req.user);
+  }
+
+  // ✅ GENERAL ROUTES - ĐẶT SAU CÁC ROUTES CỐ ĐỊNH
+  @Roles('admin', 'ca_user','member')
   @Get()
   findAll(
     @Query('page') page?: string,
@@ -54,6 +99,7 @@ export class UserController {
     return this.userService.findAll(pageNum, limitNum, role, companyId, req.user);
   }
 
+  // ✅ DYNAMIC ROUTES - ĐẶT CUỐI CÙNG
   @Roles('admin', 'ca_user')
   @Get(':id')
   findOne(
@@ -81,16 +127,5 @@ export class UserController {
     @Req() req
   ) {
     return this.userService.remove(id, req.user);
-  }
-
-  // Endpoint mới để admin gán member thành ca_user
-  @Roles('admin')
-  @Post('assign-ca-users')
-  @HttpCode(HttpStatus.OK)
-  assignCaUsers(
-    @Body(ValidationPipe) dto: AssignCaUserDto,
-    @Req() req
-  ) {
-    return this.userService.assignCaUsers(dto, req.user);
   }
 }

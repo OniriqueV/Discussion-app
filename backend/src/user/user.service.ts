@@ -14,6 +14,13 @@ import { AssignCaUserDto } from './dto/assign-ca-user.dto';
 import * as bcrypt from 'bcrypt';
 import { sendEmail } from 'src/utils/emails';
 
+export interface GetRankingDto {
+  period?: 'total' | 'weekly' | 'monthly' | 'yearly';
+  limit?: number;
+  page?: number;
+  company_id?: number;
+}
+
 @Injectable()
 export class UserService {
   constructor(private prisma: PrismaService) {}
@@ -417,4 +424,206 @@ export class UserService {
         });
 
     }
+
+  async getRanking(dto: GetRankingDto, currentUser: any) {
+  const { period = 'total', limit = 10, page = 1, company_id } = dto;
+  const skip = (page - 1) * limit;
+
+  // Determine which column to use for ranking based on period
+  let pointsColumn: string;
+  switch (period) {
+    case 'weekly':
+      pointsColumn = 'weekly_points';
+      break;
+    case 'monthly':
+      pointsColumn = 'monthly_points';
+      break;
+    case 'yearly':
+      pointsColumn = 'yearly_points';
+      break;
+    default:
+      pointsColumn = 'total_points';
+  }
+
+  // Build where conditions
+  let whereConditions: string[] = [];
+  let whereValues: (string | number)[] = [];
+  let paramIndex = 1;
+
+  // Apply company filter
+  if (company_id) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: company_id }
+    });
+
+    if (!company) {
+      throw new BadRequestException('Company không tồn tại');
+    }
+
+    whereConditions.push(`ups.company_name = $${paramIndex}`);
+    whereValues.push(company.name);
+    paramIndex++;
+  }
+
+  // Apply restriction for ca_user (not for member)
+  if (currentUser?.role === 'ca_user') {
+    const userCompany = await this.prisma.company.findUnique({
+      where: { id: currentUser.company_id }
+    });
+
+    if (userCompany) {
+      whereConditions.push(`ups.company_name = $${paramIndex}`);
+      whereValues.push(userCompany.name);
+      paramIndex++;
+    }
+  }
+
+  const whereClause = whereConditions.length > 0 
+    ? `WHERE ${whereConditions.join(' AND ')}`
+    : '';
+
+  const rankingQuery = `
+    SELECT 
+      ups.user_id,
+      ups.full_name,
+      ups.email,
+      ups.company_name,
+      ups.${pointsColumn} as points,
+      ROW_NUMBER() OVER (ORDER BY ups.${pointsColumn} DESC, ups.user_id ASC) as rank
+    FROM public.user_points_summary ups
+    ${whereClause}
+    ORDER BY ups.${pointsColumn} DESC, ups.user_id ASC
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `;
+  
+  whereValues.push(limit, skip);
+
+  const countQuery = `
+    SELECT COUNT(*) as total
+    FROM public.user_points_summary ups
+    ${whereClause}
+  `;
+
+  const countValues = whereValues.slice(0, -2);
+
+  try {
+    const [rankingData, countResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe(rankingQuery, ...whereValues) as Promise<any[]>,
+      this.prisma.$queryRawUnsafe(countQuery, ...countValues) as Promise<{ total: number | string | bigint }[]>,
+    ]);
+
+    const total = Number(countResult[0]?.total || 0);
+
+    const formattedData = rankingData.map((user: any) => ({
+      ...user,
+      points: Number(user.points),
+      rank: Number(user.rank)
+    }));
+
+    return {
+      data: formattedData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      },
+      period,
+      company_id: company_id || null
+    };
+  } catch (error) {
+    console.error('Error getting ranking:', error);
+    throw new BadRequestException('Lỗi khi lấy bảng xếp hạng');
+  }
+}
+
+
+// Get user's current rank and position
+async getUserRank(userId: number, period: 'total' | 'weekly' | 'monthly' | 'yearly' = 'total', currentUser: any) {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId, deleted_at: null },
+    include: { company: true }
+  });
+
+  if (!user) {
+    throw new NotFoundException('User không tồn tại');
+  }
+
+  // Check permissions
+  if (currentUser?.role === 'ca_user') {
+    if (user.company_id !== currentUser.company_id) {
+      throw new ForbiddenException('ca_user chỉ có thể xem rank của user trong công ty của mình');
+    }
+  }
+  // ❌ Loại bỏ đoạn chặn member ở đây
+
+  let pointsColumn: string;
+  switch (period) {
+    case 'weekly':
+      pointsColumn = 'weekly_points';
+      break;
+    case 'monthly':
+      pointsColumn = 'monthly_points';
+      break;
+    case 'yearly':
+      pointsColumn = 'yearly_points';
+      break;
+    default:
+      pointsColumn = 'total_points';
+  }
+
+  const rankQuery = `
+    WITH ranked_users AS (
+      SELECT 
+        user_id,
+        full_name,
+        email,
+        company_name,
+        ${pointsColumn} as points,
+        ROW_NUMBER() OVER (ORDER BY ${pointsColumn} DESC, user_id ASC) as rank
+      FROM public.user_points_summary
+      ${currentUser?.role === 'ca_user' ? 'WHERE company_name = $2' : ''}
+    )
+    SELECT * FROM ranked_users WHERE user_id = $1
+  `;
+
+  const queryParams: (string | number)[] = [userId];
+
+  if (currentUser?.role === 'ca_user' && user.company) {
+    queryParams.push(user.company.name);
+  }
+
+  try {
+    const result = await this.prisma.$queryRawUnsafe<any[]>(rankQuery, ...queryParams);
+
+    if (!result || result.length === 0) {
+      return {
+        user_id: userId,
+        full_name: user.full_name,
+        email: user.email,
+        company_name: user.company?.name || null,
+        points: 0,
+        rank: null,
+        period
+      };
+    }
+
+    const userRank = result[0];
+
+    return {
+      user_id: userRank.user_id,
+      full_name: userRank.full_name,
+      email: userRank.email,
+      company_name: userRank.company_name,
+      points: Number(userRank.points),
+      rank: Number(userRank.rank),
+      period
+    };
+  } catch (error) {
+    console.error('Error getting user rank:', error);
+    throw new BadRequestException('Lỗi khi lấy thứ hạng của user');
+  }
+}
+
+
 }

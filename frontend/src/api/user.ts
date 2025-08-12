@@ -51,6 +51,30 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+export interface UserRanking {
+  user_id: number;
+  full_name: string;
+  email: string;
+  company_name: string;
+  total_points: number;
+  weekly_points: number;
+  monthly_points: number;
+  yearly_points: number;
+  rank: number;
+  current_period_points: number;
+}
+
+export interface RankingResponse {
+  data: UserRanking[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  period: string;
+}
+
 class UserService {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');

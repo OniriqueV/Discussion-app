@@ -77,14 +77,28 @@ async function bootstrap() {
   });
 
   // ✅ Global validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: false, // Changed to false for more flexibility
-      disableErrorMessages: false,
-    })
-  );
+// In your main.ts, update the ValidationPipe configuration:
+
+app.useGlobalPipes(
+  new ValidationPipe({
+    transform: true,
+    transformOptions: {
+      enableImplicitConversion: true, // This is crucial for automatic type conversion
+      excludeExtraneousValues: false,
+    },
+    whitelist: true,
+    forbidNonWhitelisted: false,
+    disableErrorMessages: false,
+    // Skip missing properties that are optional
+    skipMissingProperties: true,
+    // Skip null properties 
+    skipNullProperties: false,
+    // Skip undefined properties
+    
+    skipUndefinedProperties: true,
+
+  })
+);
 
   // ✅ Add health check endpoint
   app.use('/health', (req, res) => {

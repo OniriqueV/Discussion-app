@@ -17,7 +17,7 @@ export class BirthdayJobService {
 
   constructor(private userService: UserService) {}
 
-  @Cron('*/1 * * * *') // Chạy mỗi 5 phút
+  @Cron('*/10 * * * *') // Chạy mỗi 5 phút
     async handleBirthdayEmails() {
       try {
         this.logger.log('Running birthday email job...');

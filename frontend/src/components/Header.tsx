@@ -12,6 +12,7 @@ interface HeaderProps {
   showTopics?: boolean; 
   showTags?: boolean;
   showPosts?: boolean;
+  showRanking?: boolean; // New prop for ranking
 }
 
 export default function Header({
@@ -23,6 +24,7 @@ export default function Header({
   showTopics = true,
   showTags = true,
   showPosts = true,
+  showRanking = true, // Default to true for ranking
 }: HeaderProps) {
   const router = useRouter();
   const { user: currentUser, isLoading: userLoading } = useCurrentUser();
@@ -56,8 +58,35 @@ export default function Header({
             </button>
           </div>
 
+
           {/* Navigation Section - Improved with labels */}
           <div className="flex items-center space-x-1 sm:space-x-2 lg:space-x-3">
+                      {/* BXH USER */}
+            {showRanking && (
+              <button
+                onClick={() => handleNavigate("/ranking")}
+                className="flex flex-col items-center p-2 sm:p-3 rounded-xl hover:bg-white/70 transition-all duration-300 group hover:shadow-md min-w-[60px] sm:min-w-[70px]"
+                title="Xếp hạng"
+              >
+                <svg
+                  className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 group-hover:text-yellow-500 transition-all duration-300 group-hover:scale-110"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 21h8M12 17v4m0-4c-3.314 0-6-2.686-6-6V4h12v7c0 3.314-2.686 6-6 6zm-6-6H4a2 2 0 01-2-2V7h4m12 4h2a2 2 0 002-2V7h-4"
+                  />
+                </svg>
+
+                <span className="text-xs sm:text-sm font-medium text-gray-600 group-hover:text-blue-600 transition-colors duration-300 mt-1">
+                  Xếp hạng
+                </span>
+              </button>
+            )}
             {showSettings && (
               <button
                 onClick={() => handleNavigate("/settings")}
