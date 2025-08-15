@@ -1,7 +1,37 @@
-
 import { toast } from 'react-toastify';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const UPLOADS_URL = process.env.NEXT_PUBLIC_UPLOADS_URL || 'http://localhost:8080';
+
+// Helper function to fix avatar URLs - giống như post images
+const fixAvatarUrl = (avatarUrl: string | null): string | null => {
+  if (!avatarUrl) return null;
+  
+  // Nếu đã có protocol, trả về nguyên vẹn
+  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
+    return avatarUrl;
+  }
+  
+  // Nếu bắt đầu bằng /uploads/, thêm UPLOADS_URL
+  if (avatarUrl.startsWith('/uploads/')) {
+    return `${UPLOADS_URL}${avatarUrl}`;
+  }
+  
+  // Nếu bắt đầu bằng uploads/, thêm UPLOADS_URL và /
+  if (avatarUrl.startsWith('uploads/')) {
+    return `${UPLOADS_URL}/${avatarUrl}`;
+  }
+  
+  return avatarUrl;
+};
+
+// Helper function to fix avatar URLs in user objects
+const fixUserAvatarUrl = <T extends { avatar?: string | null }>(user: T): T => {
+  if (user.avatar) {
+    user.avatar = fixAvatarUrl(user.avatar);
+  }
+  return user;
+};
 
 // Types matching your backend DTOs
 export interface CreateUserDto {
@@ -21,6 +51,7 @@ export interface UpdateUserDto {
   company_id?: number;
   status?: 'active' | 'inactive';
   day_of_birth?: string;
+  // Loại bỏ avatar từ UpdateUserDto vì sẽ upload riêng
 }
 
 export interface AssignCaUserDto {
@@ -35,6 +66,7 @@ export interface User {
   company_id?: number;
   status: 'active' | 'inactive';
   day_of_birth?: string;
+  avatar?: string; // URL của avatar
   created_at?: string;
   updated_at?: string;
   company?: {
@@ -75,12 +107,27 @@ export interface RankingResponse {
   period: string;
 }
 
+// Response type cho upload avatar
+export interface AvatarUploadResponse {
+  avatar_url: string;
+  message: string;
+  user?: User;
+}
+
 class UserService {
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : '',
+    };
+  }
+
+  private getAuthHeadersForFile() {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': token ? `Bearer ${token}` : '',
+      // Không set Content-Type cho FormData, browser sẽ tự động set
     };
   }
 
@@ -98,6 +145,39 @@ class UserService {
     
     return response.json();
   }
+
+  // Phương thức upload avatar riêng
+  async uploadAvatar(userId: number, file: File): Promise<AvatarUploadResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/avatar`, {
+        method: 'POST',
+        headers: this.getAuthHeadersForFile(),
+        body: formData,
+      });
+
+      const result = await this.handleResponse<AvatarUploadResponse>(response);
+      
+      // Fix avatar URLs trong response
+      if (result.avatar_url) {
+        result.avatar_url = fixAvatarUrl(result.avatar_url) || '';
+      }
+      if (result.user) {
+        result.user = fixUserAvatarUrl(result.user);
+      }
+      
+      toast.success('Upload avatar thành công');
+      return result;
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.error('Không thể upload avatar');
+      throw error;
+    }
+  }
+
+  // Bỏ phương thức xóa avatar vì không cần thiết nữa
 
   async getUsers(params?: {
     page?: number;
@@ -119,7 +199,14 @@ class UserService {
         headers: this.getAuthHeaders(),
       });
 
-      return this.handleResponse<PaginatedResponse<User>>(response);
+      const result = await this.handleResponse<PaginatedResponse<User>>(response);
+      
+      // Fix avatar URLs cho tất cả users
+      if (result.data) {
+        result.data = result.data.map(fixUserAvatarUrl);
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Không thể tải danh sách người dùng');
@@ -134,7 +221,8 @@ class UserService {
         headers: this.getAuthHeaders(),
       });
 
-      return this.handleResponse<User>(response);
+      const result = await this.handleResponse<User>(response);
+      return fixUserAvatarUrl(result);
     } catch (error) {
       console.error('Error fetching user:', error);
       toast.error('Không thể tải thông tin người dùng');
@@ -152,7 +240,7 @@ class UserService {
 
       const result = await this.handleResponse<User>(response);
       toast.success('Tạo người dùng thành công');
-      return result;
+      return fixUserAvatarUrl(result);
     } catch (error) {
       console.error('Error creating user:', error);
       toast.error('Không thể tạo người dùng');
@@ -170,7 +258,7 @@ class UserService {
 
       const result = await this.handleResponse<User>(response);
       toast.success('Cập nhật người dùng thành công');
-      return result;
+      return fixUserAvatarUrl(result);
     } catch (error) {
       console.error('Error updating user:', error);
       toast.error('Không thể cập nhật người dùng');

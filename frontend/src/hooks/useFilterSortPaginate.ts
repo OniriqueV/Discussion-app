@@ -70,8 +70,14 @@ export function useFilterSortPaginate<T>(
     }
 
     // Sorting
+    // Sorting (ưu tiên is_pinned)
     if (sortField) {
-      result.sort((a, b) => {
+      result.sort((a: any, b: any) => {
+        // Nếu một trong hai được ghim, đưa ghim lên trước
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+
+        // Nếu cùng trạng thái ghim → sort theo field được chọn
         const aVal = getNestedValue(a, sortField);
         const bVal = getNestedValue(b, sortField);
 
@@ -84,6 +90,7 @@ export function useFilterSortPaginate<T>(
           : String(bVal).localeCompare(String(aVal));
       });
     }
+
 
     return result;
   }, [

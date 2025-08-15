@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
 import { toast } from "react-toastify";
 
-
 type Role = "admin" | "ca_user" | "member";
 
 interface JwtPayload {
@@ -18,6 +17,30 @@ interface JwtPayload {
   avatar?: string;
   day_of_birth?: string;
 }
+
+// ✅ Import hoặc định nghĩa lại fixAvatarUrl function
+const UPLOADS_URL = process.env.NEXT_PUBLIC_UPLOADS_URL || 'http://localhost:8080';
+
+const fixAvatarUrl = (avatarUrl: string | null | undefined): string | undefined => {
+  if (!avatarUrl) return undefined;
+  
+  // Nếu đã có protocol, trả về nguyên vẹn
+  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
+    return avatarUrl;
+  }
+  
+  // Nếu bắt đầu bằng /uploads/, thêm UPLOADS_URL
+  if (avatarUrl.startsWith('/uploads/')) {
+    return `${UPLOADS_URL}${avatarUrl}`;
+  }
+  
+  // Nếu bắt đầu bằng uploads/, thêm UPLOADS_URL và /
+  if (avatarUrl.startsWith('uploads/')) {
+    return `${UPLOADS_URL}/${avatarUrl}`;
+  }
+  
+  return avatarUrl;
+};
 
 export function useAuthRedirect(...requiredRoles: Role[]) {
   const router = useRouter();
@@ -74,8 +97,7 @@ export function useAuthRedirect(...requiredRoles: Role[]) {
   return { isAuthenticated, userRole };
 }
 
-
-// ✅ FIX: Ensure user ID is always number for consistency
+// ✅ FIX: Ensure user ID is always number for consistency + Fix avatar URL
 export function useCurrentUser() {
   const [user, setUser] = useState<{
     id: number;
@@ -98,7 +120,7 @@ export function useCurrentUser() {
     try {
       const decoded: JwtPayload = jwtDecode(token);
       const now = Date.now() / 1000;
-      
+
       if (decoded.exp >= now) {
         setUser({
           id: parseInt(decoded.sub),
@@ -106,8 +128,8 @@ export function useCurrentUser() {
           role: decoded.role,
           company_id: decoded.company_id,
           full_name: decoded.full_name,
-          avatar: decoded.avatar,
-          day_of_birth: decoded.day_of_birth, // ✅ NOW AVAILABLE
+          avatar: fixAvatarUrl(decoded.avatar), // ✅ FIX: Apply fixAvatarUrl here
+          day_of_birth: decoded.day_of_birth,
         });
       } else {
         localStorage.removeItem("token");
@@ -121,5 +143,15 @@ export function useCurrentUser() {
     }
   }, []);
 
-  return { user, isLoading };
+  // ✅ Thêm method để update user avatar sau khi upload
+  const updateUserAvatar = (newAvatarUrl: string) => {
+    setUser(prevUser => 
+      prevUser ? {
+        ...prevUser,
+        avatar: fixAvatarUrl(newAvatarUrl)
+      } : null
+    );
+  };
+
+  return { user, isLoading, updateUserAvatar };
 }
