@@ -1,0 +1,200 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int             @id @default(autoincrement())
+  email           String          @unique @db.VarChar
+  password_hash   String          @db.VarChar
+  full_name       String?         @db.VarChar
+  avatar          String?         @db.VarChar
+  role            String          @default("member") @db.VarChar
+  company_id      Int?
+  status          String          @default("active") @db.VarChar
+  day_of_birth    DateTime?       @db.Date
+  created_at      DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?       @db.Timestamp(6)
+  deleted_at      DateTime?       @db.Timestamp(6)
+  comment_likes   CommentLike[]
+  comments        Comment[]
+  password_resets PasswordReset[]
+  posts_rejected  Post[]          @relation("PostRejectedBy")
+  posts_created   Post[]          @relation("PostCreatedBy")
+  user_points     UserPoint[]
+  company         Company?        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([company_id, role])
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Company {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar
+  address      String?
+  status       String?   @default("active") @db.VarChar
+  expired_time DateTime? @db.Timestamp(6)
+  max_users    Int?      @default(10)
+  logo         String?   @db.VarChar
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  posts        Post[]
+  users        User[]
+
+  @@map("companies")
+}
+
+model Topic {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  slug       String    @unique @default("") @db.VarChar
+  posts      Post[]
+
+  @@index([name])
+  @@map("topics")
+}
+
+model Tag {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  slug       String    @unique @default("") @db.VarChar
+  post_tags  PostTag[]
+
+  @@index([name])
+  @@map("tags")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model Post {
+  id               Int         @id @default(autoincrement())
+  title            String      @db.VarChar
+  description      String
+  images           String[]    @default([])
+  user_id          Int?
+  topic_id         Int?
+  company_id       Int?
+  status           String?     @default("problem") @db.VarChar
+  is_pinned        Boolean?    @default(false)
+  views            Int?        @default(0)
+  rejected_by      Int?
+  created_at       DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?   @db.Timestamp(6)
+  deleted_at       DateTime?   @db.Timestamp(6)
+  comments         Comment[]
+  post_tags        PostTag[]
+  company          Company?    @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rejected_by_user User?       @relation("PostRejectedBy", fields: [rejected_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic            Topic?      @relation(fields: [topic_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user             User?       @relation("PostCreatedBy", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_points      UserPoint[]
+
+  @@index([company_id])
+  @@index([created_at])
+  @@index([is_pinned, created_at])
+  @@index([status])
+  @@index([topic_id])
+  @@index([user_id])
+  @@map("posts")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model PostTag {
+  post_id Int
+  tag_id  Int
+
+  post Post @relation(fields: [post_id], references: [id], onDelete: NoAction)
+  tag  Tag  @relation(fields: [tag_id], references: [id], onDelete: NoAction)
+
+  @@id([post_id, tag_id])
+  @@map("post_tags")
+}
+
+
+model Comment {
+  id            Int           @id @default(autoincrement())
+  post_id       Int?
+  user_id       Int?
+  parent_id     Int?
+  content       String
+  is_solution   Boolean?      @default(false)
+  created_at    DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?     @db.Timestamp(6)
+  deleted_at    DateTime?     @db.Timestamp(6)
+  comment_likes CommentLike[]
+  parent        Comment?      @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies       Comment[]     @relation("CommentReplies")
+  post          Post?         @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user          User?         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_points   UserPoint[]
+
+  @@index([parent_id])
+  @@index([post_id, is_solution])
+  @@index([user_id])
+  @@map("comments")
+}
+
+model CommentLike {
+  id         Int       @id @default(autoincrement())
+  comment_id Int?
+  user_id    Int?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  comment    Comment?  @relation(fields: [comment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user       User?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@map("comment_likes")
+}
+
+model UserPoint {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  comment_id Int?
+  post_id    Int?
+  point      Int       @default(1)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  comment    Comment?  @relation(fields: [comment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  post       Post?     @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user       User?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([user_id])
+  @@map("user_points")
+}
+
+model PasswordReset {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  token      String    @db.VarChar
+  expired_at DateTime  @db.Timestamp(6)
+  is_used    Boolean?  @default(false)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  user       User?     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("password_resets")
+}
+
+view UserPointsSummary {
+  user_id        Int     @id
+  full_name      String? @db.VarChar
+  email          String  @db.VarChar
+  company_name   String? @db.VarChar
+  total_points   BigInt
+  weekly_points  BigInt
+  monthly_points BigInt
+  yearly_points  BigInt
+
+  @@map("user_points_summary")
+}
