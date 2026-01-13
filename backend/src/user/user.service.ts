@@ -13,6 +13,9 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignCaUserDto } from './dto/assign-ca-user.dto';
 import * as bcrypt from 'bcrypt';
 import { sendEmail } from 'src/utils/emails';
+import { unlink } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
 export interface GetRankingDto {
   period?: 'total' | 'weekly' | 'monthly' | 'yearly';
@@ -169,38 +172,71 @@ export class UserService {
     return userResponse;
   }
 
-  private async checkUpdatePermission(existingUser: any, dto: UpdateUserDto, currentUser: any) {
-    if (currentUser.role === 'admin') {
-      // Admin có thể cập nhật bất kỳ user nào
-      return;
-    }
-
-    if (currentUser.role === 'ca_user') {
-      // ca_user chỉ có thể cập nhật user trong công ty của mình
-      if (existingUser.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('ca_user chỉ có thể cập nhật user trong công ty của mình');
-      }
-
-      // ca_user không thể thay đổi role hoặc company_id
-      if (dto.role && dto.role !== existingUser.role) {
-        throw new ForbiddenException('ca_user không thể thay đổi role của user');
-      }
-
-      if (dto.company_id && dto.company_id !== currentUser.company_id) {
-        throw new ForbiddenException('ca_user không thể chuyển user sang công ty khác');
-      }
-
-      // Only admin can update email
-      if (dto.email) {
-        throw new ForbiddenException('Chỉ admin mới có thể cập nhật email');
-      }
-      
-      return;
-    }
-
-    // Member không có quyền cập nhật user nào
-    throw new ForbiddenException('Bạn không có quyền cập nhật user');
+  private async checkUpdatePermission(
+  existingUser: any,
+  dto: UpdateUserDto,
+  currentUser: any
+) {
+  if (currentUser.role === 'admin') {
+    // Admin có thể cập nhật bất kỳ user nào
+    return;
   }
+
+  if (currentUser.role === 'ca_user') {
+    // ca_user chỉ có thể cập nhật user trong công ty của mình
+    if (existingUser.company_id !== currentUser.company_id) {
+      throw new ForbiddenException(
+        'ca_user chỉ có thể cập nhật user trong công ty của mình'
+      );
+    }
+
+    // ca_user không thể thay đổi role hoặc company_id
+    if (dto.role && dto.role !== existingUser.role) {
+      throw new ForbiddenException('ca_user không thể thay đổi role của user');
+    }
+
+    if (dto.company_id && dto.company_id !== currentUser.company_id) {
+      throw new ForbiddenException(
+        'ca_user không thể chuyển user sang công ty khác'
+      );
+    }
+
+    // Only admin can update email
+    if (dto.email) {
+      throw new ForbiddenException('Chỉ admin mới có thể cập nhật email');
+    }
+
+    return;
+  }
+
+  if (currentUser.role === 'member') {
+    // Member chỉ được cập nhật chính mình
+    if (currentUser.id !== existingUser.id) {
+      throw new ForbiddenException(
+        'Bạn chỉ có thể cập nhật thông tin của chính mình'
+      );
+    }
+
+    // Member không được đổi role hoặc company_id
+    if (dto.role && dto.role !== existingUser.role) {
+      throw new ForbiddenException('Bạn không thể thay đổi role của mình');
+    }
+
+    if (dto.company_id && dto.company_id !== existingUser.company_id) {
+      throw new ForbiddenException('Bạn không thể thay đổi công ty của mình');
+    }
+
+    // Nếu muốn chặn đổi email:
+    if (dto.email) {
+      throw new ForbiddenException('Bạn không thể thay đổi email của mình');
+    }
+
+    return;
+  }
+
+  throw new ForbiddenException('Bạn không có quyền cập nhật user');
+}
+
 
   async findAll(page: number = 1, limit: number = 10, role?: string, company_id?: number, currentUser?: any) {
     const skip = (page - 1) * limit;
@@ -624,6 +660,64 @@ async getUserRank(userId: number, period: 'total' | 'weekly' | 'monthly' | 'year
     throw new BadRequestException('Lỗi khi lấy thứ hạng của user');
   }
 }
+
+async updateAvatar(userId: number, filename: string) {
+    // Lấy thông tin user hiện tại để xóa avatar cũ
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar: true },
+    });
+
+    if (!currentUser) {
+      throw new NotFoundException('User không tồn tại');
+    }
+
+    // Xóa avatar cũ nếu tồn tại
+    if (currentUser.avatar) {
+      await this.deleteOldAvatarFile(currentUser.avatar);
+    }
+
+    // Tạo URL cho avatar mới - sử dụng cùng format như post images
+    const avatarUrl = `/uploads/avatars/${filename}`;
+
+    // Cập nhật database
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar: avatarUrl },
+      select: { 
+        id: true, 
+        avatar: true, 
+        full_name: true,
+        email: true 
+      },
+    });
+
+    return updatedUser;
+  }
+
+  private async deleteOldAvatarFile(avatarUrl: string) {
+    try {
+      // Parse filename from URL - handle avatar URL format
+      let filename = '';
+      if (avatarUrl.includes('/uploads/avatars/')) {
+        filename = avatarUrl.split('/uploads/avatars/')[1];
+      } else {
+        console.warn('Unknown avatar URL format:', avatarUrl);
+        return;
+      }
+      
+      const filePath = join(process.cwd(), 'uploads', 'avatars', filename);
+      
+      // Kiểm tra file có tồn tại không trước khi xóa
+      if (existsSync(filePath)) {
+        await unlink(filePath);
+        console.log(`Đã xóa avatar cũ: ${filePath}`);
+      }
+    } catch (error) {
+      console.warn('Không thể xóa avatar cũ:', error.message);
+      // Không throw error vì việc xóa file cũ không quan trọng bằng việc upload file mới
+    }
+  };
 
 
 }

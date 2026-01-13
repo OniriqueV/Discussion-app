@@ -14,6 +14,9 @@ import {
   ValidationPipe,
   HttpStatus,
   HttpCode,
+  ForbiddenException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -23,11 +26,63 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { GetRankingDto } from './dto/get-ranking.dto';
+import { diskStorage } from 'multer';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { extname, join } from 'path';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+@UseGuards(JwtAuthGuard)
+  @Post(':id/avatar')
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadPath = join(process.cwd(), 'uploads', 'avatars');
+          cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const extension = extname(file.originalname);
+          cb(null, `avatar-${uniqueSuffix}${extension}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          return cb(new Error('Only image files are allowed!'), false);
+        }
+        cb(null, true);
+      },
+      limits: { 
+        fileSize: 5 * 1024 * 1024, // 5MB
+        files: 1 
+      },
+    }),
+  )
+  async uploadAvatar(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req,
+  ) {
+    if (req.user.id !== id && req.user.role !== 'admin') {
+      throw new ForbiddenException('Không có quyền upload avatar cho user này');
+    }
+
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+
+    const result = await this.userService.updateAvatar(id, file.filename);
+    
+    return {
+      message: 'Avatar uploaded successfully',
+      avatar_url: result.avatar,
+      user: result
+    };
+  }
 
   @Roles('admin', 'ca_user')
   @Post()
@@ -109,15 +164,20 @@ export class UserController {
     return this.userService.findOne(id, req.user);
   }
 
-  @Roles('admin', 'ca_user')
+  @Roles('admin', 'ca_user', 'member')
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body(ValidationPipe) dto: UpdateUserDto,
     @Req() req,
   ) {
+    // Chặn member update người khác
+    if (req.user.role === 'member' && req.user.id !== id) {
+      throw new ForbiddenException('Bạn chỉ có thể chỉnh sửa tài khoản của mình');
+    }
     return this.userService.update(id, dto, req.user);
   }
+
 
   @Roles('admin', 'ca_user')
   @Delete(':id')
